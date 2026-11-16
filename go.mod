@@ -3,7 +3,7 @@ module convo-cli
 go 1.26.11
 
 require (
-	github.com/Masterminds/semver/v3 v3.3.1
+	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.9
 	github.com/zalando/go-keyring v0.2.8
