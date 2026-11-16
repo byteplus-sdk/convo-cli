@@ -5,7 +5,7 @@ go 1.26.11
 require (
 	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/spf13/cobra v1.10.2
-	github.com/spf13/pflag v1.0.9
+	github.com/spf13/pflag v1.1.0
 	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/sys v0.50.0
 	golang.org/x/term v0.48.0
