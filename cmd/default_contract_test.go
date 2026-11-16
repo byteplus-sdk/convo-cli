@@ -134,7 +134,7 @@ func TestDefaultContractFixtureMatchesDevBehavior(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(string(goMod), "module "+fixture.Identity.Module+"\n") {
+	if strings.TrimSpace(strings.SplitN(string(goMod), "\n", 2)[0]) != "module "+fixture.Identity.Module {
 		t.Fatalf("module identity drifted: %s", goMod)
 	}
 	cfg := config.Default("fixture", "voice-agent", "web")
