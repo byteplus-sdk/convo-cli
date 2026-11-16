@@ -169,22 +169,43 @@ func captureCommandStdout(t *testing.T, run func() error) string {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer reader.Close()
+	defer writer.Close()
 	os.Stdout = writer
 	defer func() { os.Stdout = previous }()
-	if err := run(); err != nil {
-		_ = writer.Close()
-		t.Fatal(err)
+	type captureResult struct {
+		data []byte
+		err  error
 	}
-	if err := writer.Close(); err != nil {
-		t.Fatal(err)
-	}
+	result := make(chan captureResult, 1)
+	go func() {
+		data, err := io.ReadAll(reader)
+		result <- captureResult{data, err}
+	}()
+	runErr := run()
+	closeErr := writer.Close()
 	os.Stdout = previous
-	data, err := io.ReadAll(reader)
-	if err != nil {
-		t.Fatal(err)
+	captured := <-result
+	if runErr != nil {
+		t.Fatal(runErr)
 	}
-	if err := reader.Close(); err != nil {
-		t.Fatal(err)
+	if closeErr != nil {
+		t.Fatal(closeErr)
 	}
+	if captured.err != nil {
+		t.Fatal(captured.err)
+	}
+	data := captured.data
 	return string(data)
+}
+
+func TestCaptureCommandStdoutLargeOutput(t *testing.T) {
+	want := strings.Repeat("output", 256*1024)
+	got := captureCommandStdout(t, func() error {
+		_, err := io.WriteString(os.Stdout, want)
+		return err
+	})
+	if got != want {
+		t.Fatalf("captured %d bytes, want %d", len(got), len(want))
+	}
 }

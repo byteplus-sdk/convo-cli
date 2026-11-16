@@ -24,7 +24,7 @@ convo-cli version --format pretty
 ```
 
 If the package install completed but its binary download failed, verify access
-to GitHub Releases. A source build with Go 1.25.13 or later is an alternative:
+to GitHub Releases. A source build with Go 1.26.11 or later is an alternative:
 
 ```bash
 cd convo-cli
