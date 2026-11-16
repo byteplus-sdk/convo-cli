@@ -26,7 +26,11 @@ if [[ -z "$changed_files" ]]; then
   if [[ -z "$base" ]] && git rev-parse --verify --quiet HEAD^ >/dev/null; then
     base="HEAD^"
   fi
-  if [[ -z "$base" ]] || ! git rev-parse --verify --quiet "$base^{commit}" >/dev/null; then
+  root_commit=0
+  if [[ -z "$base" ]] && [[ "$(git rev-parse --is-shallow-repository)" == false ]] && ! git rev-parse --verify --quiet HEAD^ >/dev/null; then
+    root_commit=1
+  fi
+  if [[ "$root_commit" -eq 0 ]] && { [[ -z "$base" ]] || ! git rev-parse --verify --quiet "$base^{commit}" >/dev/null; }; then
     echo "check-change-contract: unable to determine comparison base; set CHANGE_CONTRACT_BASE" >&2
     exit 1
   fi
@@ -34,7 +38,11 @@ if [[ -z "$changed_files" ]]; then
   # Include local staged, unstaged, and new files so `make ci` catches the same
   # omissions before a developer creates the commit that CI will inspect.
   changed_files="$({
-    git diff --name-only "$base"...HEAD
+    if [[ "$root_commit" -eq 1 ]]; then
+      git diff-tree --root --no-commit-id --name-only -r HEAD
+    else
+      git diff --name-only "$base"...HEAD
+    fi
     git diff --name-only
     git diff --name-only --cached
     git ls-files --others --exclude-standard

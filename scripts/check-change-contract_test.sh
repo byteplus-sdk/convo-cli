@@ -112,6 +112,31 @@ expect_unrelated_origin_head_uses_local_parent() {
   )
 }
 
+expect_root_commit_checks_all_files() {
+  local dir
+  dir="$(make_fixture)"
+  trap 'rm -rf "$dir"' RETURN
+  (
+    unset CHANGE_CONTRACT_BASE CI_MERGE_REQUEST_DIFF_BASE_SHA CI_COMMIT_BEFORE_SHA CHANGE_CONTRACT_CHANGED_FILES
+    cd "$dir"
+    CHANGE_CONTRACT_BASE=0000000000000000000000000000000000000000 "$check" >/dev/null
+    mkdir -p cmd
+    printf 'package cmd\n' >cmd/new.go
+    git add cmd/new.go
+    git commit --amend --no-edit -q
+    if "$check" >/dev/null 2>&1; then
+      echo 'expected root commit command changes to require tests' >&2
+      exit 1
+    fi
+    printf 'package cmd\n' >cmd/new_test.go
+    git add cmd/new_test.go
+    git commit --amend --no-edit -q
+    "$check" >/dev/null
+  )
+}
+
+expect_root_commit_checks_all_files
+
 expect_ci_before_sha_catches_all_pushed_commits
 expect_origin_head_catches_all_local_commits
 expect_unrelated_origin_head_uses_local_parent

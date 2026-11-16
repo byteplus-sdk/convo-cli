@@ -33,7 +33,7 @@ actual="$(cat "$capture")"
 
 PATH="$tmp/bin:$PATH" TOOLCHAIN_CAPTURE="$capture" make -s -C "$repo_root" release-tools
 actual="$(cat "$capture")"
-expected="go1.26.4"
+expected="go1.26.11"
 [[ "$actual" == "$expected" ]] || {
   echo "release-tools used GOTOOLCHAIN=${actual:-<unset>}; expected $expected" >&2
   exit 1
@@ -42,7 +42,7 @@ expected="go1.26.4"
 windows_ci="$repo_root/scripts/ci-windows.ps1"
 workflow="$repo_root/.github/workflows/ci.yml"
 [[ -f "$windows_ci" ]]
-grep -Fq '$requiredGoVersion = "go1.25.13"' "$windows_ci"
+grep -Fq '$requiredGoVersion = "go1.26.11"' "$windows_ci"
 grep -Fq 'go test -count=1 ./...' "$windows_ci"
 grep -Fq 'go build -trimpath -o $binary .' "$windows_ci"
 grep -Fq 'run: ./scripts/ci-windows.ps1' "$workflow"
