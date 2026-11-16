@@ -1,0 +1,94 @@
+# AGENTS.md — contributing to convo-cli
+
+Conventions for humans and Agents working in this repo. Keep changes minimal,
+scoped, and consistent with the surrounding code.
+
+## Repository language
+
+English is the default language for documentation, CLI help and messages, Skills,
+code comments, commit messages, and merge request titles and descriptions. Keep
+`README.md` and other primary entry documents in English. Translations may be
+provided as supplementary documents with explicit language labels.
+
+## Architecture at a glance
+
+```
+main.go                 → cmd.Execute()
+cmd/                    → cobra command tree (one file per command group)
+internal/
+  product/              → immutable product profile and scalar contracts
+  meta/                 → CLI identity and release metadata, defaults from product
+  output/               → JSON envelope, stdout(data)/stderr(progress) split, --format
+  errs/                 → typed error envelope + stable error.code catalog (CI-gated)
+  config/               → byteplus-rtc.config.yaml schema, load/save/validate, ${ENV}, sync stub
+  token/                → vendored VRTC AccessToken + issue/check/inspect
+  template/             → registry provider + pinned remote downloader/cache + renderer
+    registry_default.go → default template entries, SDK and archive pins
+    files/              → reserved location for future embedded template sources
+  errorcodes/           → embedded Web SDK error-code KB (web.yaml) + loader
+  doctor/               → two-level readiness checks
+  affordance/           → per-command when/avoid/prereq/examples (surfaced in --help)
+  env/                  → dotenv read/merge/write (secrets masked)
+  auth/                 → local auth session
+  skillsfs/             → reader over the embedded skills FS (list/read, path guards)
+  skillscan/            → Skill quality gate (command authenticity + metadata/links/secrets)
+skills/                 → BytePlus Agent scene workflows (SKILL.md); skills.Content embeds them
+skill-template/         → standard structure for new scene skills
+tests/                  → E2E: builds the binary, drives it as a subprocess
+scripts/                → CI helpers (snapshot-error-codes.sh)
+```
+
+## Rules
+
+1. **Never hard-code the binary name.** Use `meta.BinName` in help text, hints,
+   skills and affordances. Renaming the CLI must stay a one-line change.
+2. **Every CLI failure is a typed `*errs.Error` with a registered `error.code`.**
+   Add new codes to `errs.Catalog`, then regenerate the snapshot:
+   `UPDATE_SNAPSHOT=1 go test ./internal/errs/ -run TestCatalogSnapshot`.
+   `make check-error-codes` gates this in CI. CLI `error.code`s are a **separate
+   system** from SDK runtime codes (those live in `internal/errorcodes`, queried
+   by `explain-error`).
+3. **stdout is data only.** Emit results via `output.Writer.Data`; send progress,
+   warnings and hints to stderr via `Progress`/`Warn`. Never `fmt.Println` to
+   stdout from a command. If a command pre-emits data then fails, mark the error
+   `.Reported()` so no second envelope is written.
+4. **`byteplus-rtc.config.yaml` is the single source of truth.** New state belongs in
+   the schema (or an `${ENV}` reference), not scattered per-command files.
+   Secrets (AppKey) are env-only — never persisted to config.
+5. **Side-effecting commands support `--dry-run`** and must write nothing in that
+   mode (`init`, `config set`, `env write`, `dev`).
+6. **Templates are immutable and version-pinned.** Embedded sources live under
+   `internal/template/files/<scene>/<platform>/` as `*.tmpl`. Remote sources must
+   pin a full commit and SHA-256, validate `byteplus-rtc.template.yaml`, taskfile and
+   scene contracts, safely extract, and remain covered by offline-cache tests.
+7. **Add tests.** Unit tests colocated with the package; E2E in `tests/` for any
+   new command surface. Run `make test` before sending changes.
+8. **Skills are Agent scene workflows** — use a thin top-level
+   router for scene decisions, command order, and failure routing; put detailed
+   domain knowledge in flat `references/`. Follow `skill-template/skill-template.md`.
+
+9. **Product contracts have explicit owners.** Scalar defaults live in
+   `internal/product/default.go` and are read through `product.Current()`.
+   Project setup behavior belongs to `cmd/dev_setup_default.go`, VoiceChat
+   request encoding to `internal/openapi/agent_contract_default.go`, and
+   template selection to `internal/template/registry_default.go`. Keep behavior
+   behind these consumer-owned interfaces. Keep command implementations free of
+   branches on product identity. Update the default contract fixture and
+   affected package tests when a product contract changes.
+
+## Branches
+
+- `dev` is the development branch. Create feature branches from `dev` and target it in development merge requests.
+- `main` carries the audited source tree used for open-source synchronization. Promote reviewed snapshots from `dev` through the public-tree workflow.
+- The repository default branch is `main`. Release tags belong to this repository's verified release commits.
+
+## Commit / PR
+
+- Keep the diff focused on one capability.
+- Run `make ci` locally before pushing — it covers gofmt-check →
+  vet → golangci-lint → tests → error/contract checks → build → public-surface /
+  safety checks → Node installer tests. Run `make tools` once to install the
+  configured pinned development tools. Auto-fix formatting/imports with `make fmt`.
+- Update `README.md` when the command surface changes.
+
+`make test` runs the BytePlus unit and integration suites. `tests/byteplus` builds the release binary and checks the distributed surface.

@@ -1,0 +1,120 @@
+{
+  "authentication": {
+    "authorize_endpoint": "https://signin.byteplus.com/authorize/oauth/authorize",
+    "directory": ".convo-cli",
+    "home_env": "CONVO_CLI_HOME",
+    "local_client_id": "trn:signin:::devtools/same-device",
+    "scope": "Console:All:All",
+    "storage_namespace": "byteplus",
+    "token_endpoint": "https://signin.byteplus.com/authorize/oauth/token"
+  },
+  "commands": {
+    "hidden": [
+      "agent",
+      "completion",
+      "config",
+      "env",
+      "openapi",
+      "token"
+    ],
+    "visible": [
+      "auth",
+      "dev",
+      "docs",
+      "doctor",
+      "explain-error",
+      "help",
+      "init",
+      "skills",
+      "update",
+      "version"
+    ]
+  },
+  "config": {
+    "agent_config_file": "server/scenes/default.json",
+    "agent_user_id": "voice_agent",
+    "openapi_endpoint": "https://rtc.ap-southeast-1.byteplusapi.com",
+    "openapi_region": "ap-southeast-1",
+    "openapi_service": "rtc",
+    "project_region": "ap-southeast-1",
+    "rtc_app_id": "${RTC_APP_ID}",
+    "rtc_room_id": "room-01",
+    "rtc_user_id": "user-01"
+  },
+  "distribution": {
+    "npm_package": "@byteplus/convo-cli",
+    "npm_registry_url": "https://registry.npmjs.org/@byteplus%2Fconvo-cli/latest"
+  },
+  "docs_mcp_endpoint": "https://topic.bytedance.com/mcp/byteplus-rtc",
+  "doctor_check_ids": [
+    "cli.runtime",
+    "cli.version",
+    "cli.update",
+    "cli.toolchain",
+    "cli.auth"
+  ],
+  "identity": {
+    "binary": "convo-cli",
+    "business_id": "byteplus_rtc_cli",
+    "config_file": "byteplus-rtc.config.yaml",
+    "display_name": "BytePlus",
+    "module": "convo-cli",
+    "user_agent_product": "convo-cli"
+  },
+  "openapi": {
+    "agent_target_user_id_field": "TargetUserID",
+    "agent_user_id_field": "UserID",
+    "app_management": {
+      "app_key_action": "DescribeAppKeys",
+      "app_key_method": "POST",
+      "app_key_version": "2020-12-01",
+      "list_action": "DescribeApps",
+      "list_method": "GET",
+      "list_version": "2018-01-01"
+    },
+    "endpoint": "https://rtc.ap-southeast-1.byteplusapi.com",
+    "region": "ap-southeast-1",
+    "service": "rtc",
+    "voicechat_version": "2025-05-01"
+  },
+  "protected_paths": [
+    "cmd",
+    "internal/product/byteplus.go",
+    "internal/product/default.go",
+    "internal/template/registry_default.go",
+    "internal/openapi/agent_contract_default.go",
+    "skills/byted-bp-convo-guide/SKILL.md"
+  ],
+  "public_vocabulary": {
+    "business_id_env": "BYTEPLUS_RTC_BUSINESS_ID",
+    "cli_path_env": "BYTEPLUS_RTC_CLI_PATH",
+    "error_code_prefix": "byteplus-rtc",
+    "openapi_user_agent_env": "BYTEPLUS_RTC_OPENAPI_USER_AGENT",
+    "project_dir_env": "BYTEPLUS_RTC_PROJECT_DIR",
+    "project_env_file_env": "BYTEPLUS_RTC_ENV_FILE"
+  },
+  "schema_version": 1,
+  "skills": {
+    "official_name": "byted-bp-convo-guide",
+    "skills_notifier_env": "CONVO_CLI_NO_SKILLS_NOTIFIER",
+    "state_dir_env": "CONVO_CLI_STATE_DIR",
+    "state_dir_name": "convo-cli",
+    "update_notifier_env": "CONVO_CLI_NO_UPDATE_NOTIFIER"
+  },
+  "template": {
+    "commit": "c6b974902f2ef5af4ebd5be83aa5af89c8ee98e6",
+    "manifest_file": "byteplus-rtc.template.yaml",
+    "platform": "web",
+    "repository": "byteplus-sdk/RTC_AIGC_Demo",
+    "scene": "voice-agent",
+    "sdk_name": "@byteplus/rtc",
+    "sdk_version": "4.69.3",
+    "sha256": "3f9ed94dc92342748b616dfec4fed9f22c8d709da67785db8acbea0026f5fa2d",
+    "taskfile": "byteplus-rtc.taskfile.yaml"
+  },
+  "voicechat": {
+    "start_action": "StartVoiceChat",
+    "start_request_json": "{\"AppId\":\"app\",\"RoomId\":\"room\",\"TaskId\":\"task\",\"Config\":{\"ASRConfig\":{}},\"AgentConfig\":{\"TargetUserID\":[\"user\"],\"UserID\":\"agent\"}}",
+    "stop_action": "StopVoiceChat"
+  }
+}

@@ -1,0 +1,115 @@
+name: Publish release
+
+on:
+  push:
+    tags: ["v*"]
+
+concurrency:
+  group: publish-release
+  queue: max
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  publish-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out committed tag source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+      - name: Resolve immutable publication identity
+        run: |
+          test "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = tag
+          test "$(git rev-parse "$GITHUB_REF_NAME^{commit}")" = "$GITHUB_SHA"
+          version="${GITHUB_REF_NAME#v}"
+          stability=stable
+          prerelease=false
+          latest=true
+          npm_tag=latest
+          if [[ "$version" == *-* ]]; then
+            stability=prerelease
+            prerelease=true
+            latest=false
+            npm_tag=next
+          fi
+          notes_file="$RUNNER_TEMP/release-notes.md"
+          git for-each-ref --format='%(contents)' "refs/tags/$GITHUB_REF_NAME" > "$notes_file"
+          test -s "$notes_file"
+          echo "CONVO_CLI_VERSION=$version" >> "$GITHUB_ENV"
+          echo "CONVO_CLI_STABILITY=$stability" >> "$GITHUB_ENV"
+          echo "CONVO_CLI_PRERELEASE=$prerelease" >> "$GITHUB_ENV"
+          echo "CONVO_CLI_LATEST=$latest" >> "$GITHUB_ENV"
+          echo "CONVO_CLI_NPM_TAG=$npm_tag" >> "$GITHUB_ENV"
+          echo "CONVO_CLI_NOTES_FILE=$notes_file" >> "$GITHUB_ENV"
+      - name: Install pinned release tools
+        run: make tools release-tools
+      - name: Verify release readiness
+        run: |
+          make ci
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          make check-release-files
+      - name: Build and verify all seven release assets
+        run: |
+          verified_dist="$RUNNER_TEMP/convo-cli-verified-dist"
+          GORELEASER="$(go env GOPATH)/bin/goreleaser" \
+            ./scripts/build-release-artifacts.sh \
+              --stability "$CONVO_CLI_STABILITY" \
+              --publication public \
+              --version "$GITHUB_REF_NAME" \
+              --ref "$GITHUB_SHA" \
+              --output "$verified_dist"
+          mapfile -t assets < <(find "$verified_dist" -maxdepth 1 -type f \
+            \( -name "convo-cli_${CONVO_CLI_VERSION}_*.tar.gz" -o -name "convo-cli_${CONVO_CLI_VERSION}_*.zip" -o -name checksums.txt \))
+          test "${#assets[@]}" -eq 7
+          echo "CONVO_CLI_VERIFIED_DIST=$verified_dist" >> "$GITHUB_ENV"
+      - name: Prepare verified npm package input
+        run: |
+          npm_root="$RUNNER_TEMP/convo-cli-npm-package"
+          mkdir -p "$npm_root/artifacts" "$npm_root/scripts"
+          cp package.json CHANGELOG.md LICENSE README.md "$npm_root/"
+          cp scripts/install.js scripts/run.js "$npm_root/scripts/"
+          cp "$CONVO_CLI_VERIFIED_DIST"/convo-cli_"${CONVO_CLI_VERSION}"_*.tar.gz "$npm_root/artifacts/"
+          cp "$CONVO_CLI_VERIFIED_DIST"/convo-cli_"${CONVO_CLI_VERSION}"_*.zip "$npm_root/artifacts/"
+          cp "$CONVO_CLI_VERIFIED_DIST/checksums.txt" "$npm_root/checksums.txt"
+          npm --prefix "$npm_root" version "$CONVO_CLI_VERSION" --no-git-tag-version --allow-same-version
+          echo "CONVO_CLI_NPM_ROOT=$npm_root" >> "$GITHUB_ENV"
+      - name: Stage draft, publish npm package, then finalize GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          ./scripts/publish-release-assets.sh \
+            --tag "$GITHUB_REF_NAME" \
+            --target "$GITHUB_SHA" \
+            --artifacts "$CONVO_CLI_VERIFIED_DIST" \
+            --npm-root "$CONVO_CLI_NPM_ROOT" \
+            --notes-file "$CONVO_CLI_NOTES_FILE" \
+            --prerelease "$CONVO_CLI_PRERELEASE" \
+            --latest "$CONVO_CLI_LATEST" \
+            --npm-tag "$CONVO_CLI_NPM_TAG"
+      - name: Verify GitHub and npm publication
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ./scripts/verify-release-publication.sh \
+            --repository "$GITHUB_REPOSITORY" \
+            --tag "$GITHUB_REF_NAME" \
+            --target "$GITHUB_SHA" \
+            --notes-file "$CONVO_CLI_NOTES_FILE" \
+            --prerelease "$CONVO_CLI_PRERELEASE" \
+            --latest "$CONVO_CLI_LATEST" \
+            --npm-tag "$CONVO_CLI_NPM_TAG"

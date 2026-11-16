@@ -1,0 +1,199 @@
+#!/usr/bin/env bash
+# Copyright (c) 2026 BytePlus Pte. Ltd.
+# SPDX-License-Identifier: MIT
+
+# Verify the user-visible GitHub and npm postconditions for one public release.
+set -euo pipefail
+
+repository="${GITHUB_REPOSITORY:-}"
+tag=""
+target=""
+package_name="@byteplus/convo-cli"
+npm_tag="latest"
+prerelease="false"
+latest="true"
+run_id=""
+notes_file=""
+
+die() { echo "verify-release-publication: $*" >&2; exit 1; }
+
+normalized_notes() {
+  jq -Rs 'gsub("\r\n"; "\n") | sub("\n+$"; "")' "$1"
+}
+
+npm_view() {
+  npm view "$@" --json \
+    --cache "$npm_cache" \
+    --registry "$npm_registry" \
+    --prefer-online
+}
+
+npm_view_with_retry() {
+  local output_file="$1" error_file="$2" delay
+  shift 2
+  local -a retry_delays=(0 5 10 20 40 80)
+  for delay in "${retry_delays[@]}"; do
+    if (( delay > 0 )); then
+      echo "verify-release-publication: npm registry returns E404; retrying in ${delay}s" >&2
+      sleep "$delay"
+    fi
+    if npm_view "$@" > "$output_file" 2> "$error_file"; then
+      return 0
+    fi
+    if ! grep -Eq '(^|[[:space:]])E404([[:space:]]|$)|404 Not Found' "$error_file"; then
+      [[ ! -s "$error_file" ]] || sed -n '1,20p' "$error_file" >&2
+      die "npm registry lookup failed for $*"
+    fi
+  done
+  [[ ! -s "$error_file" ]] || sed -n '1,20p' "$error_file" >&2
+  die "npm package remained unavailable for $*"
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --repository) repository="$2"; shift 2 ;;
+    --tag) tag="$2"; shift 2 ;;
+    --target) target="$2"; shift 2 ;;
+    --package) package_name="$2"; shift 2 ;;
+    --npm-tag) npm_tag="$2"; shift 2 ;;
+    --prerelease) prerelease="$2"; shift 2 ;;
+    --latest) latest="$2"; shift 2 ;;
+    --run-id) run_id="$2"; shift 2 ;;
+    --notes-file) notes_file="$2"; shift 2 ;;
+    *) die "unknown argument: $1" ;;
+  esac
+done
+
+[[ -n "$repository" && -n "$tag" && "$target" =~ ^[0-9a-f]{40}$ && -f "$notes_file" ]] \
+  || die "--repository, --tag, full --target, and --notes-file are required"
+[[ "$prerelease" == "true" || "$prerelease" == "false" ]] || die "--prerelease must be true or false"
+[[ "$latest" == "true" || "$latest" == "false" ]] || die "--latest must be true or false"
+[[ "$prerelease" != "true" || "$latest" == "false" ]] || die "GitHub prereleases cannot be Latest"
+for command_name in gh npm jq shasum tar unzip grep find awk sed sleep; do
+  command -v "$command_name" >/dev/null 2>&1 || die "missing required command: $command_name"
+done
+
+skill_frontmatter_version() {
+  awk '
+    NR == 1 {
+      line = $0
+      sub(/\r$/, "", line)
+      if (line != "---") exit 2
+      next
+    }
+    {
+      line = $0
+      sub(/\r$/, "", line)
+      if (line == "---") {
+        closed = 1
+        if (count != 1) exit 3
+        print version
+        exit 0
+      }
+      if (line ~ /^[[:space:]]*version:[[:space:]]*/) {
+        count++
+        sub(/^[[:space:]]*version:[[:space:]]*/, "", line)
+        if (line ~ /^"[^"]*"$/) {
+          sub(/^"/, "", line)
+          sub(/"$/, "", line)
+        }
+        version = line
+      }
+    }
+    END {
+      if (!closed) exit 4
+    }
+  ' "$1"
+}
+
+tmp_root="$(mktemp -d)"
+trap 'rm -rf "$tmp_root"' EXIT
+version="${tag#v}"
+tag_object_type="$(gh api "repos/$repository/git/ref/tags/$tag" --jq '.object.type')"
+tag_object_sha="$(gh api "repos/$repository/git/ref/tags/$tag" --jq '.object.sha')"
+[[ "$tag_object_type" == "tag" ]] || die "public version tag must be annotated"
+remote_target="$(gh api "repos/$repository/git/tags/$tag_object_sha" --jq '.object.sha')"
+[[ "$remote_target" == "$target" ]] || die "tag target mismatch: expected $target, observed $remote_target"
+
+tag_source="$tmp_root/tag-source"
+mkdir -p "$tag_source"
+gh api "repos/$repository/contents/package.json?ref=$tag" \
+  -H 'Accept: application/vnd.github.raw' > "$tag_source/package.json"
+[[ "$(jq -er '.version' "$tag_source/package.json")" == "$version" ]] \
+  || die "tag package.json version does not match $version"
+tag_skill_paths=()
+while IFS= read -r skill_path; do tag_skill_paths+=("$skill_path"); done < <(
+  gh api "repos/$repository/git/trees/$remote_target?recursive=1" \
+    --jq '.tree[] | select(.type == "blob") | .path | select(test("^skills/[^/]+/SKILL\\.md$"))'
+)
+[[ "${#tag_skill_paths[@]}" -gt 0 ]] || die "tag source has no official Skills"
+for skill_path in "${tag_skill_paths[@]}"; do
+  skill_file="$tag_source/$(basename "$(dirname "$skill_path")").SKILL.md"
+  gh api "repos/$repository/contents/$skill_path?ref=$tag" \
+    -H 'Accept: application/vnd.github.raw' > "$skill_file"
+  observed_skill_version="$(skill_frontmatter_version "$skill_file")" \
+    || die "tag Skill frontmatter is invalid: $skill_path"
+  [[ "$observed_skill_version" == "$version" ]] \
+    || die "tag Skill version mismatch: $skill_path"
+done
+
+if [[ -n "$run_id" ]]; then
+  run_json="$(gh run view "$run_id" --repo "$repository" --json status,conclusion,headSha,event)"
+  [[ "$(jq -r '.status' <<< "$run_json")" == "completed" ]] || die "workflow run $run_id is not complete"
+  [[ "$(jq -r '.conclusion' <<< "$run_json")" == "success" ]] || die "workflow run $run_id did not succeed"
+  [[ "$(jq -r '.headSha' <<< "$run_json")" == "$target" ]] || die "workflow run target differs from $target"
+  [[ "$(jq -r '.event' <<< "$run_json")" == "push" ]] || die "workflow run was not tag-triggered"
+fi
+
+npm_cache="$tmp_root/npm-cache"
+npm_registry="https://registry.npmjs.org"
+release_json="$tmp_root/release.json"
+gh release view "$tag" --repo "$repository" --json tagName,name,body,isDraft,isPrerelease,targetCommitish,assets > "$release_json"
+[[ "$(jq -r '.isDraft' "$release_json")" == "false" ]] || die "release is still a draft"
+[[ "$(jq -r '.isPrerelease' "$release_json")" == "$prerelease" ]] || die "release prerelease flag mismatch"
+[[ "$(jq -r '.name' "$release_json")" == "convo-cli $version" ]] || die "release title mismatch"
+observed_notes="$tmp_root/release-notes.md"
+jq -j '.body' "$release_json" > "$observed_notes"
+[[ "$(normalized_notes "$notes_file")" == "$(normalized_notes "$observed_notes")" ]] \
+  || die "release notes mismatch"
+observed_latest="$(gh api "repos/$repository/releases/latest" --jq '.tag_name' 2>/dev/null || true)"
+if [[ "$latest" == "true" ]]; then
+  [[ "$observed_latest" == "$tag" ]] || die "GitHub Latest does not resolve to $tag"
+else
+  [[ "$observed_latest" != "$tag" ]] || die "GitHub prerelease unexpectedly resolves as Latest"
+fi
+[[ "$(jq '.assets | length' "$release_json")" -eq 7 ]] || die "release does not contain seven assets"
+
+assets_dir="$tmp_root/assets"
+mkdir -p "$assets_dir"
+gh release download "$tag" --repo "$repository" --dir "$assets_dir"
+(cd "$assets_dir" && shasum -a 256 -c checksums.txt)
+archives=()
+while IFS= read -r archive; do archives+=("$archive"); done < <(find "$assets_dir" -maxdepth 1 -type f \( -name "convo-cli_${version}_*.tar.gz" -o -name "convo-cli_${version}_*.zip" \) | LC_ALL=C sort)
+[[ "${#archives[@]}" -eq 6 ]] || die "expected six versioned archives"
+for archive in "${archives[@]}"; do
+  case "$archive" in
+    *.tar.gz)
+      skill_paths="$(tar -tzf "$archive" | grep -E '^skills/[^/]+/SKILL\.md$' || true)"
+      [[ -n "$skill_paths" ]] || die "archive lacks embedded Skills: $(basename "$archive")"
+      while IFS= read -r skill_path; do
+        tar -xOzf "$archive" "$skill_path" | grep -Fq "version: \"$version\"" || die "Skill version mismatch in $(basename "$archive")"
+      done <<< "$skill_paths"
+      ;;
+    *.zip)
+      skill_paths="$(unzip -Z1 "$archive" | grep -E '^skills/[^/]+/SKILL\.md$' || true)"
+      [[ -n "$skill_paths" ]] || die "archive lacks embedded Skills: $(basename "$archive")"
+      while IFS= read -r skill_path; do
+        unzip -p "$archive" "$skill_path" | grep -Fq "version: \"$version\"" || die "Skill version mismatch in $(basename "$archive")"
+      done <<< "$skill_paths"
+      ;;
+  esac
+done
+
+npm_version_json="$tmp_root/npm-version.json"
+npm_view_with_retry "$npm_version_json" "$tmp_root/npm-version.error" "$package_name@$version" version
+[[ "$(jq -er '.' "$npm_version_json")" == "$version" ]] || die "npm version is missing"
+npm_tag_json="$tmp_root/npm-tag.json"
+npm_view_with_retry "$npm_tag_json" "$tmp_root/npm-tag.error" "$package_name@$npm_tag" version
+[[ "$(jq -er '.' "$npm_tag_json")" == "$version" ]] || die "npm $npm_tag does not resolve to $version"
+echo "verify-release-publication: complete tag=$tag target=$target assets=7 npm=$package_name@$version npm_tag=$npm_tag prerelease=$prerelease latest=$latest"

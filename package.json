@@ -1,0 +1,33 @@
+{
+  "name": "@byteplus/convo-cli",
+  "version": "0.0.1-rc.1",
+  "description": "BytePlus RTC conversational AI developer CLI",
+  "bin": {
+    "convo-cli": "scripts/run.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/install.js"
+  },
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "files": [
+    "scripts/install.js",
+    "scripts/run.js",
+    "artifacts/",
+    "checksums.txt",
+    "CHANGELOG.md",
+    "LICENSE",
+    "README.md"
+  ],
+  "license": "MIT"
+}

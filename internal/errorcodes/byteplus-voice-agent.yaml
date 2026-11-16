@@ -1,0 +1,392 @@
+codes:
+    - code: SignatureDoesNotMatch
+      doctor_check: agent.auth
+      enum: OpenAPI
+      fix: Run {{bin}} auth login to refresh credentials, then retry. This is general troubleshooting guidance; consult the official documentation for details.
+      kind: error
+      meaning: The OpenAPI request signature does not match. Credentials may be missing or expired, or the signature calculation may be incorrect.
+      verified: unverified
+    - code: InvalidAccessKey
+      doctor_check: agent.auth
+      enum: OpenAPI
+      fix: Run {{bin}} auth login to refresh credentials. This is general troubleshooting guidance; consult the official documentation for details.
+      kind: error
+      meaning: OpenAPI credentials are invalid or expired.
+      verified: unverified
+    - code: InvalidParameter
+      doctor_check: agent.config
+      enum: OpenAPI
+      fix: Correct the parameters indicated by the error; run {{bin}} doctor to check the agent configuration.
+      kind: error
+      meaning: Invalid request parameters, such as incorrect ASR, TTS, or LLM configuration.
+      verified: unverified
+    - code: InvalidParameter.TaskAlreadyExists
+      enum: OpenAPI
+      fix: Run {{bin}} agent stop before restarting, or reuse the existing TaskId.
+      kind: error
+      meaning: A conversation task is already running in this room.
+      verified: unverified
+    - code: InvalidParameter.ErrorActiveTaskNotFound
+      enum: OpenAPI
+      fix: Check the TaskId, or run {{bin}} agent start first.
+      kind: error
+      meaning: The specified task does not exist or has already stopped.
+      verified: unverified
+    - code: InvalidParameter.IllegalRoomID
+      doctor_check: agent.config
+      enum: OpenAPI
+      fix: Provide a valid room ID.
+      kind: error
+      meaning: RoomId has an invalid format.
+      verified: unverified
+    - code: InvalidParameter.BodyIsEmpty
+      enum: OpenAPI
+      fix: Provide the request parameters.
+      kind: error
+      meaning: The request body is empty.
+      verified: unverified
+    - code: InvalidParameter.Unmarshal
+      enum: OpenAPI
+      fix: Use the required parameter format.
+      kind: error
+      meaning: The request could not be parsed because the parameter format is invalid.
+      verified: unverified
+    - code: MissingParameter.NoAppId
+      doctor_check: agent.config
+      enum: OpenAPI
+      fix: Set rtc.app_id; run {{bin}} doctor to check the configuration.
+      kind: error
+      meaning: AppId is missing.
+      verified: unverified
+    - code: MissingParameter.NoRoomId
+      doctor_check: agent.config
+      enum: OpenAPI
+      fix: Provide RoomId.
+      kind: error
+      meaning: RoomId is missing.
+      verified: unverified
+    - code: MissingParameter.NoUserId
+      doctor_check: agent.config
+      enum: OpenAPI
+      fix: Provide UserId.
+      kind: error
+      meaning: UserId is missing.
+      verified: unverified
+    - code: MissingParameter.NoToken
+      doctor_check: token.valid
+      enum: OpenAPI
+      fix: Provide a Token; generate one with {{bin}} token issue.
+      kind: error
+      meaning: Token is missing.
+      verified: unverified
+    - code: AccessDenied.ServiceNotEnabled
+      doctor_check: agent.config
+      enum: OpenAPI
+      fix: Enable the required services in the console, then retry.
+      kind: error
+      meaning: A required service, such as an ASR, TTS, or LLM dependency, has not been enabled.
+      verified: unverified
+    - code: AccessDenied.NoPermissionForApp
+      doctor_check: agent.auth
+      enum: OpenAPI
+      fix: Select an RTC AppID accessible to the authenticated account. Ask the application owner or IAM administrator for access, then select the application again and refresh local credentials.
+      kind: error
+      meaning: This AccountId does not have permission to operate on this AppId.
+      verified: unverified
+    - code: Unauthorized
+      doctor_check: agent.auth
+      enum: OpenAPI
+      fix: Check the AppId and account ID.
+      kind: error
+      meaning: The AppId does not match the account ID.
+      verified: unverified
+    - code: FlowLimitExceeded.QPSOverLimit
+      enum: OpenAPI
+      fix: Reduce the request frequency.
+      kind: error
+      meaning: The QPS limit has been exceeded.
+      verified: unverified
+    - code: UnknownAction
+      enum: OpenAPI
+      fix: Check that Action is an API name defined by OpenAPI.
+      kind: error
+      meaning: Action is not defined by OpenAPI.
+      verified: unverified
+    - code: UnknownVersion
+      enum: OpenAPI
+      fix: Set Version to the required API version, such as 2020-12-01.
+      kind: error
+      meaning: The API version is unknown.
+      verified: unverified
+    - code: InternalError.ReachRateLimit
+      enum: OpenAPI
+      fix: Reduce the request frequency.
+      kind: error
+      meaning: The system rate limit was reached.
+      verified: unverified
+    - code: InternalError.Parallel
+      enum: OpenAPI
+      fix: Serialize requests for the same task.
+      kind: error
+      meaning: Concurrent operations targeted the same task.
+      verified: unverified
+    - code: InternalError.RPC
+      doctor_check: agent.auth
+      enum: OpenAPI
+      fix: Retry the request and check the AppId.
+      kind: error
+      meaning: The RPC call failed, or the AppId or its permissions are invalid.
+      verified: unverified
+    - code: InternalError.Unknown
+      enum: OpenAPI
+      fix: Retry; contact technical support if the problem persists.
+      kind: error
+      meaning: A system failure prevented startup.
+      verified: unverified
+    - code: 1000001
+      enum: VoiceChat
+      fix: Retry later; contact technical support if the problem persists.
+      kind: error
+      meaning: Task initialization failed
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1000002
+      doctor_check: agent.config
+      enum: VoiceChat
+      fix: Check the request against the StartVoiceChat documentation and correct invalid parameters.
+      kind: error
+      meaning: Unknown parameter
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1003001
+      doctor_check: agent.config
+      enum: VoiceChat
+      fix: Check Provider and ProviderParams in ASRConfig.
+      kind: error
+      meaning: ASR instantiation failed
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1003002
+      enum: VoiceChat
+      fix: Check the network connection; contact technical support if the problem persists.
+      kind: error
+      meaning: ASR request failed
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1003003
+      enum: VoiceChat
+      fix: Check network stability.
+      kind: error
+      meaning: Failed to read ASR response
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1003004
+      doctor_check: agent.config
+      enum: VoiceChat
+      fix: For custom ASR, check that its response format follows the protocol.
+      kind: error
+      meaning: Failed to parse ASR response
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1003005
+      enum: VoiceChat
+      fix: Check ASR service stability and network connectivity.
+      kind: error
+      meaning: Too many ASR reconnection failures
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1003006
+      doctor_check: agent.config
+      enum: VoiceChat
+      fix: Enable the ASR service; check authentication in ASRConfig.ProviderParams and network firewall rules.
+      kind: error
+      meaning: Failed to establish ASR connection
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1004001
+      doctor_check: agent.config
+      enum: VoiceChat
+      fix: Check Mode, EndPointId, APIKey, and other parameters in LLMConfig.
+      kind: error
+      meaning: LLM instantiation failed
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1004002
+      enum: VoiceChat
+      fix: Check the network connection; contact technical support if the problem persists.
+      kind: error
+      meaning: LLM request failed
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1004003
+      enum: VoiceChat
+      fix: Check network stability.
+      kind: error
+      meaning: Failed to read LLM response
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1004004
+      doctor_check: agent.config
+      enum: VoiceChat
+      fix: For third-party LLMs, check that the response format follows the API specification.
+      kind: error
+      meaning: Failed to process LLM response
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1004005
+      doctor_check: agent.config
+      enum: VoiceChat
+      fix: Enable the LLM service; check URL, APIKey, and other authentication settings in LLMConfig and network firewall rules.
+      kind: error
+      meaning: Failed to establish LLM connection
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1004006
+      enum: VoiceChat
+      fix: Check that the application service is running and its URL is publicly accessible.
+      kind: error
+      meaning: Function Calling request failed
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1004007
+      enum: VoiceChat
+      fix: Check that the application service handles callback requests correctly.
+      kind: error
+      meaning: Function Calling response request failed
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1004008
+      doctor_check: agent.config
+      enum: VoiceChat
+      fix: Check the TTS configuration.
+      kind: error
+      meaning: Comfort message processing failed
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1004009
+      enum: VoiceChat
+      fix: Check the MCP server address and service availability.
+      kind: error
+      meaning: Failed to obtain tools from MCP
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1004010
+      enum: VoiceChat
+      fix: Check the implementation of the MCP server tools.
+      kind: error
+      meaning: Failed to call MCP tools
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1005001
+      doctor_check: agent.config
+      enum: VoiceChat
+      fix: Check Provider and ProviderParams in TTSConfig.
+      kind: error
+      meaning: TTS instantiation failed
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1005002
+      enum: VoiceChat
+      fix: Check the network connection; contact technical support if the problem persists.
+      kind: error
+      meaning: TTS request failed
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1005003
+      enum: VoiceChat
+      fix: Check network stability.
+      kind: error
+      meaning: Failed to read TTS response
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1005004
+      doctor_check: agent.config
+      enum: VoiceChat
+      fix: For custom TTS, check that its response format follows the protocol.
+      kind: error
+      meaning: Failed to process TTS response
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1005005
+      doctor_check: agent.config
+      enum: VoiceChat
+      fix: Enable the TTS service; check authentication in TTSConfig.ProviderParams and network firewall rules.
+      kind: error
+      meaning: Failed to establish connection with TTS
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1006001
+      doctor_check: agent.config
+      enum: VoiceChat
+      fix: Check AvatarAppID, AvatarToken, and other parameters in AvatarConfig.
+      kind: error
+      meaning: Failed to establish connection with Avatar
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+    - code: 1006002
+      enum: VoiceChat
+      fix: Contact technical support.
+      kind: error
+      meaning: Avatar service internal error
+      source: '{{bin}} docs fetch 6a7a95054bdbc784e3d95150'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: VoiceChat callback (EventType=1)
+meta:
+    domain: voice-agent
+    enums:
+        - OpenAPI
+        - VoiceChat
+    fetched: "2026-10-15"
+    platform: voice-agent
+    source: ""
+    verified: unverified
+    verified_at: ""

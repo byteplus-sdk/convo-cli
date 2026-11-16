@@ -1,0 +1,725 @@
+codes:
+    - code: INVALID_ENGINE
+      enum: ErrorCode
+      kind: error
+      meaning: Invalid param. Triggered when you call `destroyEngine` with an invalid engine object.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: INVALID_PARAMS
+      enum: ErrorCode
+      fix: Provide valid parameters according to the method documentation.
+      kind: error
+      meaning: Generally used error code. Triggered when you call any API with invalid parameters. Please refer to the API documentation and pass in the correct parameters.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: INVALID_TOKEN
+      doctor_check: token.valid
+      enum: ErrorCode
+      fix: Obtain a new Token, then call joinRoom again.
+      kind: error
+      meaning: Invalid Token. Triggered when you call `joinRoom` with an invalid or expired Token. Please obtain a new Token and call `joinRoom` again.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: JOIN_ROOM_FAILED
+      doctor_check: room.reachable
+      enum: ErrorCode
+      kind: error
+      meaning: Triggered when the user fails to enter the room after `joinRoom` is called. Please check the returned message for the specific reason.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: UPDATE_TOKEN_WITH_INVALID_TOKEN
+      doctor_check: token.valid
+      enum: ErrorCode
+      fix: Use a valid Token.
+      kind: error
+      meaning: Invalid Token. Triggered when you call `updateToken` with an invalid Token.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: UPDATE_TOKEN_BEFORE_JOIN
+      enum: ErrorCode
+      fix: Call joinRoom to join the room first.
+      kind: error
+      meaning: The user has not joined a room yet. Triggered When you call `updateToken` before the user enters the room. Please make sure the user is already in the room first.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: REPEAT_JOIN
+      enum: ErrorCode
+      kind: error
+      meaning: Join the same room repeatedly. Triggered when you call `joinRoom` after the user enters the room.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: REPEAT_PUSH
+      enum: ErrorCode
+      kind: error
+      meaning: Publish a public stream repeatedly. Triggered when you call `startPushPublicStream` after the public stream has been published.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: REPEAT_PLAY
+      enum: ErrorCode
+      kind: error
+      meaning: Subscribe to a public stream repeatedly. Triggered when repeatedly calling `startPlayPublicStream` to subscribe to the same public stream.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: NO_PUBLISH_PERMISSION
+      enum: ErrorCode
+      fix: Call setUserVisibility to make the local user visible before publishing streams.
+      kind: error
+      meaning: No permission to publish streams. Triggered when you call `publishStream` or `publishScreen` to publish streams after setting the user to be invisible to others in the room with `setUserVisibility`. Please switch the user to be visible first.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: STREAM_NOT_EXIST
+      enum: ErrorCode
+      fix: Check the ID and confirm that the target stream is in the room.
+      kind: error
+      meaning: The target stream does not exist. Triggered when you call `subscribeStream`/`unsubscribeStream` to subscribe to or unsubscribe from a stream that does not exist, or `takeRemoteSnapshot` to take a screenshot of a remote stream that does not exist. Please enter the correct ID or make sure that the target stream is in the room.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: NOT_CONNECTED_YET
+      doctor_check: room.reachable
+      enum: ErrorCode
+      fix: Check that the user has joined the room and the network connection is available.
+      kind: error
+      meaning: No connection has been built. Triggered when you call the current API while the SDK has not connected to the server yet. Please make sure the user has joined the room when you call the method, or check if the network connection is normal.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: KICKED_OUT
+      enum: ErrorCode
+      kind: error
+      meaning: The user has been removed from the room by the administrator via a OpenAPI call. Triggered through the `onError` callback.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onError
+    - code: ROOM_DISMISS
+      enum: ErrorCode
+      kind: error
+      meaning: All the users have been removed from the room because the administrator dismissed the room by calling an OpenAPI. Triggered through the `onError` callback.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onError
+    - code: TOKEN_EXPIRED
+      doctor_check: token.valid
+      enum: ErrorCode
+      fix: Obtain a new Token, then call joinRoom to rejoin the room.
+      kind: error
+      meaning: The token expires after the user joins the room. Triggered through the `onError` callback. Please obtain a new Token and call `joinRoom` to re-enter the room with the new Token.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onError
+    - code: TOKEN_NO_PUBLISH_PERMISSION
+      doctor_check: token.valid
+      enum: ErrorCode
+      fix: Call updateToken to refresh publishing permissions.
+      kind: error
+      meaning: Token expired. Call `updateToken` to update publishing permission with the new token.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onTokenPublishPrivilegeDidExpired
+    - code: TOKEN_NO_SUBSCRIBE_PERMISSION
+      doctor_check: token.valid
+      enum: ErrorCode
+      fix: Call updateToken to refresh subscription permissions.
+      kind: error
+      meaning: Token expired. Call `updateToken` to update subscription permission with the new token.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onTokenSubscribePrivilegeDidExpired
+    - code: DUPLICATE_LOGIN
+      enum: ErrorCode
+      kind: error
+      meaning: The user has been removed from the room because the same user joined the room on the other client. Triggered through the `onError` callback.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onError
+    - code: INVOKED_BEFORE_CAPTURE
+      enum: ErrorCode
+      fix: Check that the specified stream has been published.
+      kind: error
+      meaning: No such stream. Triggered when you call `takeLocalSnapshot` to take a screenshot of a local stream that does not exist. Please make sure that the specified stream has been published.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: REPEAT_CAPTURE
+      enum: ErrorCode
+      kind: error
+      meaning: Capture has started. Triggered when you repeatedly call `startAudioCapture`, `startVideoCapture`, or `startAudioAndVideoCapture` to capture audio/video streams.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: GET_VIDEO_TRACK_FAILED
+      doctor_check: device.camera
+      enum: ErrorCode
+      fix: Check that a capture device is available and is not in use by another application.
+      kind: error
+      meaning: Capture failed. Triggered when you fail to start video capture with `startVideoCapture` or `startAudioAndVideoCapture`. Please check if there are available capture devices or if they are being used by other apps.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: GET_AUDIO_TRACK_FAILED
+      doctor_check: device.microphone
+      enum: ErrorCode
+      fix: Check that a capture device is available and is not in use by another application.
+      kind: error
+      meaning: Capture failed. Triggered when you fail to start audio capture with `startAudioCapture` or `startAudioAndVideoCapture`. Please check if there are available capture devices or if they are being used by other apps.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: GET_SCREEN_TRACK_FAILED
+      enum: ErrorCode
+      kind: error
+      meaning: Capture failed. Triggered when you fail to start screen capture with `startScreenCapture`.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: STREAM_TYPE_NOT_MATCH
+      enum: ErrorCode
+      kind: error
+      meaning: Wrong stream type. Triggered when you call `startAudioCapture`, `stopAudioCapture`, `startVideoCapture`, `stopVideoCapture`, `startAudioAndVideoCapture` or other APIs related to internal capture after switch to the custom stream source with `setAudioSourceType` or `setVideoSourceType`.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: CANT_FIND_DOM
+      enum: ErrorCode
+      kind: error
+      meaning: No DOM. Triggered when passing in a DOM that does not exist by calling `setLocalVideoPlayer` or `setRemoteVideoPlayer`.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: INVALID_DEVICE_ID
+      enum: ErrorCode
+      kind: error
+      meaning: Invalid device ID. Triggered when setting an invalid ID by calling `setAudioPlaybackDevice`.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: NOT_SUPPORTED
+      doctor_check: env.browser
+      enum: ErrorCode
+      kind: error
+      meaning: Operation not supported. Triggered when you call `startAudioDeviceRecordTest` or `setAudioPlaybackDevice` if the browser does not support audio device test or audio capture.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: ICE_SERVER_WRONG
+      doctor_check: room.reachable
+      enum: ErrorCode
+      kind: error
+      meaning: Triggered when the ICE node request fails after you call `joinRoom`.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: LOAD_RESOURCES_FAILED
+      enum: ErrorCode
+      fix: Provide a valid resource path.
+      kind: error
+      meaning: Loading resource failed. Triggered when resources fail to be loaded after you call `startAudioMixing` or `preloadAudioMixing`. Please pass in the correct resource path.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: TIME_OUT
+      doctor_check: room.reachable
+      enum: ErrorCode
+      kind: error
+      meaning: Generally used error code in the majority of features. Triggered if no acknowledgement is received within 60s.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: ADD_TRANSCEIVER_FAILED
+      enum: ErrorCode
+      kind: error
+      meaning: Failure of building a peer-connection to the signal server for the failure of building transceiver
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: PUBLISH_FAILED
+      enum: ErrorCode
+      kind: error
+      meaning: Triggered when you fail to publish a stream by calling `publishStream` or `publishScreen`. Please check the returned message for the specific reason.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: OPERATION_CANCEL
+      enum: ErrorCode
+      kind: warning
+      meaning: Generally used error code. Triggered when leaving room in the middle of operations such as publishing or subscribing to a stream.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: START_CLOUD_PROXY_AFTER_JOIN
+      enum: ErrorCode
+      fix: Call this method before joining the room.
+      kind: error
+      meaning: Wrong API call timing. Triggered when you call `startCloudProxy` after the user has joined the room. Please call `startCloudProxy` when the user is out of the room.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: STOP_CLOUD_PROXY_BEFORE_LEAVE
+      enum: ErrorCode
+      fix: Call this method after leaving the room.
+      kind: error
+      meaning: Wrong API call timing. Triggered when you call `stopCloudProxy` while the user is still in the room. Please call `stopCloudProxy` when the user is out of the room.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: UNEXPECTED_ERROR
+      enum: ErrorCode
+      kind: error
+      meaning: Generally used error code. Please check the returned message for the specific reason.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: REPEAT_DEVICE_TEST
+      enum: ErrorCode
+      kind: error
+      meaning: The test has started. Triggered when you call `startAudioPlaybackDeviceTest` or `startAudioDeviceRecordTest` to start another device test while the current one is still ongoing.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: AUDIO_DEVICE_RECORD_FAILED
+      doctor_check: device.microphone
+      enum: ErrorCode
+      fix: Retry the operation.
+      kind: error
+      meaning: Triggered when you fail to start the audio device test by calling `startAudioDeviceRecordTest`. Please try again.
+      name: AUDIO_DEVICE_TEST_FAILED
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: ALREADY_LOGIN
+      enum: ErrorCode
+      fix: Check whether the user is already logged in, or use a different userId.
+      kind: error
+      meaning: The user has already logged in. Triggered when you call `login` with a used userId. Please call `login` with a different userId.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: LOGIN_FAILED
+      enum: ErrorCode
+      kind: error
+      meaning: Login failed. Triggered when you fail to log in to the real-time signaling server by calling `login`. Please check the returned message for the specific reason.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: NOT_LOGIN
+      enum: ErrorCode
+      fix: Log in first.
+      kind: error
+      meaning: Generally used error code in message-related features. The user has not logged in. Triggered when you call the message-related APIs before successfully logging in to the real-time signaling server by calling `login`.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: RTM_DUPLICATE_LOGIN
+      enum: ErrorCode
+      kind: error
+      meaning: The local user is kicked out. Triggered through the `onError` callback when another user logs in with the same uerId as the local user.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onError
+    - code: RTM_TOKEN_ERROR
+      doctor_check: token.valid
+      enum: ErrorCode
+      fix: Log in again with a new Token.
+      kind: error
+      meaning: The Token is invalid. Triggered in the case of Token verification exception during the process of reconnecting to the real-time signaling server. Please call `login` with a new Token.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onError
+    - code: USER_MESSAGE_TIMEOUT
+      enum: ErrorCode
+      kind: error
+      meaning: P2P message failed to be sent due to a timeout. Triggered when a timeout occurs while sending a P2P message by calling methods including `sendUserMessage`, `sendUserBinaryMessage`, `sendUserMessageOutsideRoom`, `sendUserBinaryMessageOutsideRoom`, `sendServerMessage`, and `sendServerBinaryMessage`.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: USER_MESSAGE_BROKEN
+      enum: ErrorCode
+      kind: error
+      meaning: P2P message failed to be sent due to a the broken channel. Triggered when you call methods including `sendUserMessage`, `sendUserBinaryMessage`, `sendUserMessageOutsideRoom`, `sendUserBinaryMessageOutsideRoom`, `sendServerMessage`, and `sendServerBinaryMessage` while the signal channel is broken.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: USER_MESSAGE_NO_RECEIVER
+      enum: ErrorCode
+      fix: Check the supplied userId.
+      kind: error
+      meaning: No receiver. Triggered if no receiver is found after calling `sendUserMessage`, `sendUserBinaryMessage`, `sendUserMessageOutsideRoom`, `sendUserBinaryMessageOutsideRoom`, `sendServerMessage`, and `sendServerBinaryMessage`. Please make sure you pass in the right userId.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: USER_MESSAGE_SEND_TO_SERVER_ERROR
+      enum: ErrorCode
+      kind: error
+      meaning: No response from the server. Triggered if Http request fails after calling `sendServerMessage` or `sendServerBinaryMessage` to send messages to the server.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: USER_MESSAGE_SERVER_RESPONSE_ERROR
+      enum: ErrorCode
+      kind: error
+      meaning: Failed to send message to the server. Probably triggered after calling `sendServerMessage` or `sendServerBinaryMessage`. Response status code is not 200.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: USER_MESSAGE_NOT_JOIN
+      enum: ErrorCode
+      fix: Call this method after joining the room.
+      kind: error
+      meaning: The user has not joined any room. Triggered when you call `sendUserMessage` or `sendUserBinaryMessage` out of a room. Please call `joinRoom` to join a room first.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: USER_MESSAGE_NOT_LOGIN
+      enum: ErrorCode
+      fix: Call login first.
+      kind: error
+      meaning: The user has not logged in yet. Triggered when you call `sendUserMessageOutsideRoom`, `sendUserBinaryMessageOutsideRoom`, `sendServerMessage`, and `sendServerBinaryMessage` before logging in to the real-time signaling server. Please call `login` first.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: USER_MESSAGE_SERVER_PARAMS_NOTSET
+      enum: ErrorCode
+      fix: Call setServerParam to configure the application server first.
+      kind: error
+      meaning: The server params have not been set yet. Triggered when you call `sendServerMessage` or `sendServerBinaryMessage` without setting params to the server. Please call `setServerParam` first.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: USER_MESSAGE_UNKNOWN
+      enum: ErrorCode
+      kind: error
+      meaning: Unknown error. Triggered when an unknown error occurred after calling `sendUserMessage`, `sendUserBinaryMessage`, `sendUserMessageOutsideRoom`, `sendUserBinaryMessageOutsideRoom`, `sendServerMessage` or `sendServerBinaryMessage`.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: RECONNECT_FAILED
+      doctor_check: room.reachable
+      enum: ErrorCode
+      fix: Leave and rejoin the room, or contact technical support.
+      kind: error
+      meaning: Reconnection failed. Triggered through the `onError` callback if the SDK fails to reconnect to the server. The SDK will no longer automatically retry. Please leave room first and join room again, or contact the technical support.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onError
+    - code: SUBTITLE_ALREADY_ON
+      enum: ErrorCode
+      fix: Check whether subtitles are already enabled.
+      kind: error
+      meaning: Subtitles are already enabled. Triggered by another startSubtitle call while subtitles are active.
+      verified: unverified
+    - code: SUBTITLE_ERR_POSTPROCESS
+      enum: ErrorCode
+      fix: Contact technical support.
+      kind: error
+      meaning: An internal error occurred in cloud media processing.
+      verified: unverified
+      via: onSubtitleStateChanged
+    - code: SUBTITLE_ERR_CONNECTION_ERROR
+      enum: ErrorCode
+      fix: Contact technical support.
+      kind: error
+      meaning: The connection to a third-party service failed.
+      verified: unverified
+      via: onSubtitleStateChanged
+    - code: SUBTITLE_ERR_PROCESS_ERROR
+      enum: ErrorCode
+      fix: Contact technical support.
+      kind: error
+      meaning: Cloud media processing timed out.
+      verified: unverified
+      via: onSubtitleStateChanged
+    - code: SUBTITLE_ERR_UNKNOWN
+      enum: ErrorCode
+      fix: Contact technical support.
+      kind: error
+      meaning: The client does not recognize the error code returned by cloud media processing.
+      verified: unverified
+      via: onSubtitleStateChanged
+    - code: UNEXPECTED_INVOKE_FORWARD_STREAM
+      enum: ErrorCode
+      fix: Check the required call order in the API documentation.
+      kind: error
+      meaning: Unexpected operation. Triggered if the timing of API calls related to forwarding media streams across rooms is incorrect. Please refer to the documentation of each API to confirm the correct order of API calls.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: ROOM_FORBIDDEN
+      enum: ErrorCode
+      kind: error
+      meaning: The room is banned. Triggered when you call `joinRoom` to join a room that has already been banned from the server.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: USER_FORBIDDEN
+      enum: ErrorCode
+      kind: error
+      meaning: The user is banned. Triggered when you call `joinRoom` after the local user is banned.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: ERR_ELECTRON_IS_NULL
+      enum: ErrorCode
+      fix: Check that the environment meets the Electron development requirements.
+      kind: error
+      meaning: Failed to get the Electron instance. Ensure the environment meets the requirements for Electron development. Refer to [PC Screen Sharing by Web SDK in Electron](https://docs.byteplus.com/en/docs/byteplus-rtc/docs-1340581) for more.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: ELECTRON_DESKTOP_CAPTURER_GET_SOURCES_ERROR
+      enum: ErrorCode
+      kind: error
+      meaning: Failed to get the screen sharing source in Electron environment.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: SET_SIMULCAST_FAILED
+      enum: ErrorCode
+      fix: Check the required call timing for setLocalSimulcastMode.
+      kind: error
+      meaning: Failed to change the simulcast settings. Ensure that the timing of calling [`setLocalSimulcastMode`](docs-104478#rtcengine-setlocalsimulcastmode) is correct.<br>You can change the resolution after publishing, but not the number of streams.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: MIXING_OLD_AND_NEW_APIS
+      enum: ErrorCode
+      fix: setRemoteVideoConfig → setRemoteSimulcastStreamType; enableSimulcastMode → setLocalSimulcastMode.
+      kind: warning
+      meaning: Mixed the deprecated methods of Simulcast feature with the current methods is forbidden. The deprecated methods will no longer be maintained in future versions and are expected to be removed after several updates. It is advised to switch to the current methods as soon as possible.<br>+ `setRemoteVideoConfig` is deprecated. Please use [`setRemoteSimulcastStreamType`](docs-104478#rtcengine-setremotesimulcaststreamtype) instead.<br>+ `enableSimulcastMode` is deprecated. Please use [`setLocalSimulcastMode`](docs-104478#rtcengine-setlocalsimulcastmode) instead.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: WTN_PUSH_FAILED
+      enum: ErrorCode
+      kind: error
+      meaning: Failed to publish the WTN stream via [`startPushWTN`](docs-104478#wtnstream-startpushwtn).
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: WTN_PLAY_FAILED
+      enum: ErrorCode
+      kind: error
+      meaning: Failed to subscribe to the WTN stream via [`startPlayWTN`](docs-104478#wtnstream-startplaywtn).
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: NOT_ALLOWED_IN_RTS_ROOM
+      enum: ErrorCode
+      kind: error
+      meaning: The `RoomMode` is `ROOM_MODE_RTS_ONLY` (indicating that only RTS can be used in the room). Calling the room-external API is not allowed.
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+    - code: 0
+      enum: AudioMixingError
+      kind: ok
+      meaning: Normal
+      name: AUDIO_MIXING_ERROR_OK
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onAudioMixingStateChanged
+    - code: 1
+      enum: AudioMixingError
+      kind: error
+      meaning: Pre-load fails because of missing audio file or the length of the audio file exceeding 20s.
+      name: AUDIO_MIXING_ERROR_PRELOAD_FAILED
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onAudioMixingStateChanged
+    - code: 2
+      enum: AudioMixingError
+      kind: error
+      meaning: Audio mixing starts fails because of missing audio file or failure of reading the audio file.
+      name: AUDIO_MIXING_ERROR_START_FAILED
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onAudioMixingStateChanged
+    - code: 3
+      enum: AudioMixingError
+      kind: error
+      meaning: Invalid audio mixing ID
+      name: AUDIO_MIXING_ERROR_ID_NOT_FOUND
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onAudioMixingStateChanged
+    - code: 4
+      enum: AudioMixingError
+      kind: error
+      meaning: Invalid start position
+      name: AUDIO_MIXING_ERROR_SET_POSITION_FAILED
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onAudioMixingStateChanged
+    - code: 5
+      enum: AudioMixingError
+      kind: error
+      meaning: Invalid volume argument. The volume value ranges [0, 400].
+      name: AUDIO_MIXING_ERROR_INVALID_VOLUME
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onAudioMixingStateChanged
+    - code: 6
+      enum: AudioMixingError
+      fix: Call unloadAudioMixing to unload the file first.
+      kind: error
+      meaning: The audio file to be played does not match to the preload one. Call `unloadAudioMixing` to unload file and proceed.
+      name: AUDIO_MIXING_ERROR_LOAD_CONFLICT
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onAudioMixingStateChanged
+    - code: 7
+      enum: AudioMixingError
+      kind: error
+      meaning: Type of the audio file to be played is not supported.
+      name: AUDIO_MIXING_ERROR_ID_TYPE_NOT_MATCH
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onAudioMixingStateChanged
+    - code: 8
+      enum: AudioMixingError
+      kind: error
+      meaning: Invalid audio pitch
+      name: AUDIO_MIXING_ERROR_ID_TYPE_INVALID_PITCH
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onAudioMixingStateChanged
+    - code: 9
+      enum: AudioMixingError
+      kind: error
+      meaning: Invalid audio track
+      name: AUDIO_MIXING_ERROR_INVALID_AUDIO_TRACK
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onAudioMixingStateChanged
+    - code: 0
+      enum: StreamMixingEventErrorCode
+      kind: ok
+      meaning: Success.
+      name: ERR_OK
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onStreamMixingEvent
+    - code: 1
+      enum: StreamMixingEventErrorCode
+      kind: error
+      meaning: Failure. Invalid configuration parameters.
+      name: ERR_PARAM_INVALID
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onStreamMixingEvent
+    - code: 2
+      enum: StreamMixingEventErrorCode
+      kind: error
+      meaning: RTC connection failure. The RTC server will be auto-reconnected.
+      name: ERR_FRAME_TIMEOUT
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onStreamMixingEvent
+    - code: 3
+      enum: StreamMixingEventErrorCode
+      kind: error
+      meaning: Errors occur during stream mixing. Please retry your request.
+      name: ERR_POSTPROCESS
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onStreamMixingEvent
+    - code: 4
+      enum: StreamMixingEventErrorCode
+      kind: error
+      meaning: Failure. Please wait for a re-push.
+      name: ERR_PUSH_CDN
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onStreamMixingEvent
+    - code: 9999
+      enum: StreamMixingEventErrorCode
+      kind: error
+      meaning: Other unknown errors.
+      name: ERR_UNKNOWN
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onStreamMixingEvent
+    - code: 0
+      enum: ForwardStreamError
+      kind: ok
+      meaning: Success.
+      name: FORWARD_STREAM_ERROR_OK
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onForwardStreamError
+    - code: 1202
+      doctor_check: token.valid
+      enum: ForwardStreamError
+      kind: error
+      meaning: Target room's token is invalid.
+      name: FORWARD_STREAM_ERROR_INVALID_TOKEN
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onForwardStreamError
+    - code: 1203
+      enum: ForwardStreamError
+      kind: error
+      meaning: Server side error.
+      name: FORWARD_STREAM_ERROR_RESPONSE
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onForwardStreamError
+    - code: 1204
+      enum: ForwardStreamError
+      kind: error
+      meaning: The source room is set as the target room.
+      name: FORWARD_STREAM_ERROR_REMOTE_KICKED
+      source: '{{bin}} docs fetch 6a7a95034bdbc784e3d94a77'
+      verified: verified
+      verified_at: "2026-10-15"
+      via: onForwardStreamError
+meta:
+    domain: web-sdk
+    enums:
+        - ErrorCode
+        - AudioMixingError
+        - StreamMixingEventErrorCode
+        - ForwardStreamError
+    fetched: "2026-10-15"
+    platform: web
+    sdk_version: 4.67.2
+    source: ""
+    verified: unverified
+    verified_at: ""

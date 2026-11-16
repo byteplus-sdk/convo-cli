@@ -1,0 +1,72 @@
+version: 2
+
+project_name: convo-cli
+
+builds:
+  - id: convo-cli
+    main: .
+    binary: convo-cli
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+      - -buildvcs=false
+    mod_timestamp: "{{ .Env.RELEASE_TIMESTAMP }}"
+    ldflags:
+      - >-
+        -s -w
+        -X convo-cli/internal/meta.Version={{ .Version }}
+        -X convo-cli/internal/meta.ReleaseMarker=CONVO_CLI_RELEASE_VERSION={{ .Version }};
+        -X convo-cli/internal/meta.Commit={{ .Env.RELEASE_COMMIT }}
+        -X convo-cli/internal/meta.BuildDate={{ .Env.RELEASE_BUILD_DATE }}
+        -X convo-cli/internal/meta.BinName=convo-cli
+
+archives:
+  - id: convo-cli
+    ids: [convo-cli]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    builds_info:
+      mtime: "{{ .Env.RELEASE_BUILD_DATE }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - src: LICENSE
+        info:
+          mtime: "{{ .Env.RELEASE_BUILD_DATE }}"
+      - src: NOTICE
+        info:
+          mtime: "{{ .Env.RELEASE_BUILD_DATE }}"
+      - src: README.md
+        info:
+          mtime: "{{ .Env.RELEASE_BUILD_DATE }}"
+      - src: skills/**/*
+        info:
+          mtime: "{{ .Env.RELEASE_BUILD_DATE }}"
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+release:
+  draft: false
+  prerelease: auto
+  make_latest: true
+
+snapshot:
+  # scripts/build-release-artifacts.sh resolves this once before stamping and building.
+  version_template: "{{ .Env.RELEASE_VERSION }}"
+
+changelog:
+  use: git
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - 'Merge pull request'
+      - 'Merge branch'

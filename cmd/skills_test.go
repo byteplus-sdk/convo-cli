@@ -1,0 +1,242 @@
+// Copyright (c) 2026 BytePlus Pte. Ltd.
+// SPDX-License-Identifier: MIT
+
+package cmd
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"io"
+	"os"
+	"reflect"
+	"strings"
+	"testing"
+	"testing/fstest"
+
+	"convo-cli/internal/errs"
+	"convo-cli/internal/meta"
+	"convo-cli/internal/selfupdate"
+)
+
+func TestParseSkillReadTarget(t *testing.T) {
+	cases := []struct {
+		args          []string
+		name, relpath string
+		wantCode      string
+	}{
+		{[]string{"byted-bp-convo-guide"}, "byted-bp-convo-guide", "", ""},
+		{[]string{"byted-bp-convo-guide/references/quickstart.md"}, "byted-bp-convo-guide", "references/quickstart.md", ""},
+		{[]string{"byted-bp-convo-guide", "references/quickstart.md"}, "byted-bp-convo-guide", "references/quickstart.md", ""},
+		{[]string{"byted-bp-convo-guide/references", "quickstart.md"}, "", "", "byteplus-rtc.cli.invalid_flag"},
+		{[]string{`byted-bp-convo-guide\references`, "quickstart.md"}, "", "", "byteplus-rtc.cli.invalid_flag"},
+		{[]string{}, "", "", "byteplus-rtc.cli.invalid_flag"},
+		{[]string{"a", "b", "c"}, "", "", "byteplus-rtc.cli.invalid_flag"},
+	}
+	for _, c := range cases {
+		name, rel, err := parseSkillReadTarget(c.args)
+		if c.wantCode != "" {
+			typed, ok := errs.As(err)
+			if !ok || typed.Code != c.wantCode {
+				t.Fatalf("args=%v: err=%v, want code %q", c.args, err, c.wantCode)
+			}
+			continue
+		}
+		if err != nil || name != c.name || rel != c.relpath {
+			t.Fatalf("args=%v: got (%q,%q,%v), want (%q,%q,nil)", c.args, name, rel, err, c.name, c.relpath)
+		}
+	}
+}
+
+// skillsReader returns the unavailable error when nothing is embedded.
+func TestSkillsReaderUnavailable(t *testing.T) {
+	orig := officialSkillsFS
+	t.Cleanup(func() { officialSkillsFS = orig })
+	officialSkillsFS = nil
+
+	_, err := skillsReader()
+	typed, ok := errs.As(err)
+	if !ok || typed.Code != "byteplus-rtc.skills.unavailable" {
+		t.Fatalf("err = %v, want byteplus-rtc.skills.unavailable", err)
+	}
+}
+
+// With an injected FS, the reader resolves official skills.
+func TestSkillsReaderWithInjectedFS(t *testing.T) {
+	orig := officialSkillsFS
+	t.Cleanup(func() { officialSkillsFS = orig })
+	officialSkillsFS = fstest.MapFS{
+		"byted-bp-convo-guide/SKILL.md": {Data: []byte("---\nname: byted-bp-convo-guide\ndescription: va\n---\n")},
+	}
+	r, err := skillsReader()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := r.ReadSkill("byted-bp-convo-guide"); err != nil {
+		t.Fatalf("ReadSkill: %v", err)
+	}
+}
+
+// The real embedded content (skills.Content) is served and byte-identical.
+func TestSkillsReaderEmbeddedContent(t *testing.T) {
+	r, err := skillsReader()
+	if err != nil {
+		t.Fatal(err)
+	}
+	skills, err := r.List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) == 0 {
+		t.Fatal("expected embedded official skills")
+	}
+}
+
+func withSkillsSyncOverrides(t *testing.T) {
+	t.Helper()
+	oldVersion, oldFormat, oldDryRun := meta.Version, flagFormat, flagDryRun
+	meta.Version = "1.2.3"
+	flagFormat = "json"
+	flagDryRun = false
+	t.Cleanup(func() {
+		meta.Version, flagFormat, flagDryRun = oldVersion, oldFormat, oldDryRun
+		selfupdate.SkillsSyncOverride = nil
+		selfupdate.SkillsAddOverride = nil
+	})
+}
+
+func captureSkillsSyncOutput(t *testing.T, dryRun bool) ([]byte, error) {
+	t.Helper()
+	read, write, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldStdout := os.Stdout
+	os.Stdout = write
+	err = runSkillsSync(context.Background(), dryRun)
+	_ = write.Close()
+	os.Stdout = oldStdout
+	body, readErr := io.ReadAll(read)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	return body, err
+}
+
+func TestRunSkillsSyncSuccess(t *testing.T) {
+	withSkillsSyncOverrides(t)
+	called := false
+	selfupdate.SkillsSyncOverride = func(_ context.Context, version string) (selfupdate.SkillsSyncResult, error) {
+		called = true
+		if version != "1.2.3" {
+			t.Fatalf("version=%q", version)
+		}
+		return selfupdate.SkillsSyncResult{}, nil
+	}
+	body, err := captureSkillsSyncOutput(t, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !called {
+		t.Fatal("sync was not invoked")
+	}
+	var envelope struct {
+		Data skillsSyncResult `json:"data"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Data.Status != "synchronized" || envelope.Data.Version != "1.2.3" {
+		t.Fatalf("unexpected result: %+v", envelope.Data)
+	}
+}
+
+func TestRunSkillsSyncReportsRecoverableWarning(t *testing.T) {
+	withSkillsSyncOverrides(t)
+	selfupdate.SkillsSyncOverride = func(context.Context, string) (selfupdate.SkillsSyncResult, error) {
+		return selfupdate.SkillsSyncResult{Warnings: []string{"PromptScript was skipped"}}, nil
+	}
+	readErr, writeErr, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldStderr := os.Stderr
+	os.Stderr = writeErr
+	_, syncErr := captureSkillsSyncOutput(t, false)
+	_ = writeErr.Close()
+	os.Stderr = oldStderr
+	stderr, readErrValue := io.ReadAll(readErr)
+	if readErrValue != nil {
+		t.Fatal(readErrValue)
+	}
+	if syncErr != nil {
+		t.Fatal(syncErr)
+	}
+	if !strings.Contains(string(stderr), "warn: PromptScript was skipped") {
+		t.Fatalf("stderr=%q", stderr)
+	}
+}
+
+func TestRunSkillsSyncDryRunSkipsSideEffects(t *testing.T) {
+	withSkillsSyncOverrides(t)
+	selfupdate.SkillsSyncOverride = func(context.Context, string) (selfupdate.SkillsSyncResult, error) {
+		t.Fatal("dry-run invoked synchronization")
+		return selfupdate.SkillsSyncResult{}, nil
+	}
+	body, err := captureSkillsSyncOutput(t, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var envelope struct {
+		Data skillsSyncResult `json:"data"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	if envelope.Data.Status != "would_sync" {
+		t.Fatalf("unexpected result: %+v", envelope.Data)
+	}
+}
+
+func TestRunSkillsSyncReturnsTypedFailure(t *testing.T) {
+	withSkillsSyncOverrides(t)
+	selfupdate.SkillsSyncOverride = func(context.Context, string) (selfupdate.SkillsSyncResult, error) {
+		return selfupdate.SkillsSyncResult{}, errors.New("npx unavailable")
+	}
+	_, err := captureSkillsSyncOutput(t, false)
+	typed, ok := errs.As(err)
+	if !ok || typed.Code != "byteplus-rtc.skills.sync_failed" {
+		t.Fatalf("err=%v, want byteplus-rtc.skills.sync_failed", err)
+	}
+}
+
+func TestSkillsReadFormatJSONMatchesLegacyJSON(t *testing.T) {
+	oldFS, oldFormat := officialSkillsFS, flagFormat
+	officialSkillsFS = fstest.MapFS{
+		"demo/SKILL.md": {Data: []byte("---\nname: demo\ndescription: demo\n---\nbody\n")},
+	}
+	flagFormat = ""
+	t.Cleanup(func() {
+		officialSkillsFS = oldFS
+		flagFormat = oldFormat
+	})
+
+	run := func(args ...string) string {
+		root := NewRootCmd()
+		root.SetArgs(args)
+		return captureCommandStdout(t, root.Execute)
+	}
+	withFormat := run("skills", "read", "demo", "--format", "json")
+	withLegacyFlag := run("skills", "read", "demo", "--json")
+
+	var formatEnvelope, legacyEnvelope map[string]any
+	if err := json.Unmarshal([]byte(withFormat), &formatEnvelope); err != nil {
+		t.Fatalf("decode --format json output %q: %v", withFormat, err)
+	}
+	if err := json.Unmarshal([]byte(withLegacyFlag), &legacyEnvelope); err != nil {
+		t.Fatalf("decode --json output %q: %v", withLegacyFlag, err)
+	}
+	if !reflect.DeepEqual(formatEnvelope, legacyEnvelope) {
+		t.Fatalf("--format json differs from --json: format=%v legacy=%v", formatEnvelope, legacyEnvelope)
+	}
+}
