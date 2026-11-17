@@ -390,7 +390,9 @@ func TestDevRejectsOccupiedPortBeforeInstall(t *testing.T) {
 	if err := os.Mkdir(binDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	lsof := "#!/bin/sh\ncase \"$*\" in\n  *'-d cwd'*) printf 'p4242\\nfcwd\\nn/tmp/other-project\\n' ;;\n  *) printf 'p4242\\ncnode\\n' ;;\nesac\n"
+	const occupiedPID = 2147483647
+	pid := strconv.Itoa(occupiedPID)
+	lsof := "#!/bin/sh\ncase \"$*\" in\n  *'-d cwd'*) printf 'p" + pid + "\\nfcwd\\nn/tmp/other-project\\n' ;;\n  *) printf 'p" + pid + "\\ncnode\\n' ;;\nesac\n"
 	if err := os.WriteFile(filepath.Join(binDir, "lsof"), []byte(lsof), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -401,7 +403,7 @@ func TestDevRejectsOccupiedPortBeforeInstall(t *testing.T) {
 		t.Fatalf("dev error = %v, want byteplus-rtc.dev.port_in_use", err)
 	}
 	occupant, ok := typed.Details["occupant"].(map[string]any)
-	if !ok || occupant["pid"] != 4242 || occupant["process"] != "node" || occupant["directory"] != "/tmp/other-project" {
+	if !ok || occupant["pid"] != occupiedPID || occupant["process"] != "node" || occupant["directory"] != "/tmp/other-project" {
 		t.Fatalf("port occupant details = %#v", typed.Details["occupant"])
 	}
 	if !strings.Contains(typed.Message, "node") || !strings.Contains(typed.Message, "/tmp/other-project") {
