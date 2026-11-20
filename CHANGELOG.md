@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.0.1-rc.2
+
+### Improvements
+
+- Start the browser-configured Voice AI Demo from a scaffolded project or a compatible checkout. Choose Flexible or Realtime before dialing.
+- Configure Flexible resources and the Realtime OpenAI API key independently during interactive resource setup.
+- Pass a JSON request body through standard input with `openapi invoke --body @-`.
+
+### Fixes
+
+- Restrict the local Demo companion to approved browser origins and hosts.
+- Use the configured endpoint and matching credentials for custom models and speech gateways in browser-managed calls.
+- Check the browser Demo's Web SDK declaration and recognize compatible CLI-enabled checkouts.
+- Guard RTC application changes when a local signing key belongs to the previous application.
+- Preserve backend cleanup failures when stopping the Demo on Windows.
+
 ## 0.0.1-rc.1
 
 ### Improvements

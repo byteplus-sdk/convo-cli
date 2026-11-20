@@ -1,6 +1,6 @@
 {
   "name": "@byteplus/convo-cli",
-  "version": "0.0.1-rc.1",
+  "version": "0.0.1-rc.2",
   "description": "BytePlus RTC conversational AI developer CLI",
   "bin": {
     "convo-cli": "scripts/run.js"
