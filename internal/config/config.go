@@ -12,6 +12,7 @@ import (
 
 	"convo-cli/internal/errs"
 	"convo-cli/internal/meta"
+	"convo-cli/internal/nodeproject"
 	"convo-cli/internal/product"
 )
 
@@ -35,7 +36,7 @@ func Find(dir string) (string, error) {
 	}
 	for {
 		p := Path(abs)
-		if _, err := os.Stat(p); err == nil {
+		if _, err := os.Stat(p); err == nil || (os.IsNotExist(err) && nodeproject.IsAIGCDemo(abs)) {
 			return p, nil
 		}
 		parent := filepath.Dir(abs)
@@ -53,6 +54,11 @@ func Load(path string) (*Config, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			if filepath.Base(path) == meta.ConfigFileName && nodeproject.IsAIGCDemo(filepath.Dir(path)) {
+				cfg := Default("byteplus-rtc-aigc-demo", "voice-agent", "web")
+				cfg.UseBrowserAgent()
+				return cfg, nil
+			}
 			return nil, errs.New("byteplus-rtc.config.not_found", errs.TypeNotFound,
 				"%s not found", path).
 				WithHint("run `%s init` to scaffold one", meta.BinName)

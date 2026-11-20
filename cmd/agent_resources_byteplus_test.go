@@ -39,7 +39,7 @@ func TestBytePlusRuntimeStartInjectsCredentialsInsideCLI(t *testing.T) {
 		"LLMConfig":{"Mode":"BytePlusArk"},
 		"TTSConfig":{"Provider":"byteplus_Bidirectional_streaming","ProviderParams":{"ResourceId":"seed-tts-2.0"}}
 	}`)}
-	if err := (bytePlusAgentResourceContract{}).PrepareRuntimeStart(context.Background(), nil, &req, false); err != nil {
+	if err := (bytePlusAgentResourceContract{}).PrepareRuntimeStart(context.Background(), nil, &req, runtimeStartOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	var got map[string]any
@@ -83,7 +83,7 @@ func TestBytePlusRuntimeStartPreservesDemoProviderSelection(t *testing.T) {
 	t.Setenv("BYTEPLUS_SEED_SPEECH_APP_ID", "speech-1")
 	t.Setenv("BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN", "speech-secret")
 	req := openapi.StartVoiceChatRequest{Config: json.RawMessage(`{"LLMConfig":{"Provider":"BytePlus","EndPointId":"selected-endpoint"},"TTSConfig":{"Provider":"BytePlus","ProviderParams":{"ResourceId":"seed-tts-2.0","audio":{"voice_type":"selected-voice"}}}}`)}
-	if err := (bytePlusAgentResourceContract{}).PrepareRuntimeStart(context.Background(), nil, &req, false); err != nil {
+	if err := (bytePlusAgentResourceContract{}).PrepareRuntimeStart(context.Background(), nil, &req, runtimeStartOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	var got map[string]any
@@ -102,7 +102,7 @@ func TestRuntimeOpenAIProvidersDoNotRequireBytePlusResources(t *testing.T) {
 	t.Setenv("OPENAI_API_KEY", "openai-secret")
 	t.Setenv("AKOOL_API_KEY", "akool-secret")
 	req := openapi.StartVoiceChatRequest{Config: json.RawMessage(`{"LLMConfig":{"Provider":"OpenAI","ModelName":"gpt-4o"},"TTSConfig":{"Provider":"OpenAI","ProviderParams":{"Voice":"alloy"}},"AvatarConfig":{"Enabled":true,"Provider":"Akool","ProviderParams":{"AvatarId":"selected-avatar"}}}`)}
-	if err := (bytePlusAgentResourceContract{}).PrepareRuntimeStart(context.Background(), nil, &req, false); err != nil {
+	if err := (bytePlusAgentResourceContract{}).PrepareRuntimeStart(context.Background(), nil, &req, runtimeStartOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	var got map[string]any
@@ -121,7 +121,7 @@ func TestRuntimeOpenAIProvidersDoNotRequireBytePlusResources(t *testing.T) {
 func TestRuntimeMissingAvatarCredentialNamesTheField(t *testing.T) {
 	t.Setenv("AKOOL_API_KEY", "")
 	req := openapi.StartVoiceChatRequest{Config: json.RawMessage(`{"AvatarConfig":{"Enabled":true,"Provider":"Akool","ProviderParams":{"AvatarId":"avatar"}}}`)}
-	err := (bytePlusAgentResourceContract{}).PrepareRuntimeStart(context.Background(), nil, &req, false)
+	err := (bytePlusAgentResourceContract{}).PrepareRuntimeStart(context.Background(), nil, &req, runtimeStartOptions{})
 	if err == nil || !strings.Contains(err.Error(), "AKOOL_API_KEY") {
 		t.Fatalf("error=%v", err)
 	}
@@ -185,7 +185,7 @@ func TestAgentPreflightPreservesFlagSelectedResourceContext(t *testing.T) {
 	}
 	defer cleanup()
 	req := openapi.StartVoiceChatRequest{Config: json.RawMessage(`{"LLMConfig":{"Provider":"BytePlus"},"ASRConfig":{"Provider":"BytePlus","ProviderParams":{}}}`)}
-	if err := contract.PrepareRuntimeStart(context.Background(), nil, &req, false); err != nil {
+	if err := contract.PrepareRuntimeStart(context.Background(), nil, &req, runtimeStartOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	var got struct {

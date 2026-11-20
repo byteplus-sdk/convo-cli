@@ -198,7 +198,7 @@ func newAgentStartCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if err := resources.PrepareRuntimeStart(c.Context(), cfg, &req, flagDryRun); err != nil {
+				if err := resources.PrepareRuntimeStart(c.Context(), cfg, &req, runtimeStartOptions{dryRun: flagDryRun}); err != nil {
 					return err
 				}
 				// The companion server is local project code and may be modified;

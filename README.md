@@ -24,7 +24,7 @@ convo-cli version
 
 ## Quick start
 
-Use a BytePlus account with RTC enabled. The default conversation providers use ModelArk and Seed Speech; see [resource setup](skills/byted-bp-convo-guide/references/resource-setup.md) for account permissions and provider choices.
+Use a BytePlus account with RTC enabled. Flexible mode defaults to ModelArk and Seed Speech. Realtime mode uses an OpenAI API key.
 
 ```bash
 convo-cli auth login --browser=open
@@ -34,13 +34,13 @@ convo-cli agent resources --write
 convo-cli dev
 ```
 
-On the first `dev` run, the CLI reads the RTC applications available to the signed-in account and writes the selected AppID and AppKey to the local `.env.local`. IAM sub-users need RTC application read permissions, including `DescribeApps` and `DescribeAppKeys`.
+For a clone of the [CLI-enabled Demo](https://github.com/byteplus-sdk/RTC_AIGC_Demo/tree/feat/rtc-cli-integration), run the last two commands from the repository root. In an interactive terminal, choose whether to configure Flexible resources and enter an OpenAI API key for Realtime if needed. The key prompt hides your input.
 
-Open the web URL reported by `dev`, select the conversation providers, and start a conversation. Use `convo-cli dev --app-id <app-id>` to select an RTC application explicitly.
+On the first `dev` run, select an RTC application or pass `--app-id <app-id>`. The CLI saves the AppID locally and uses the account's GetToken permission to issue room tokens. Open the web URL reported by `dev`, choose the call mode, and start a conversation.
 
 Use `convo-cli agent resources --write` to choose model and speech resources by name. Use `--dry-run` to preview configuration updates. For setup and account changes, see [resource setup](skills/byted-bp-convo-guide/references/resource-setup.md).
 
-`agent check` checks the configured providers and Seed Speech access before creating a conversation task. The Demo checks its current selection when configuration changes and before joining a room.
+The Web Demo checks its selected configuration before a call. For projects with a saved agent scene, `convo-cli agent check` checks the scene's providers and Seed Speech access.
 
 ## Commands
 

@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"convo-cli/internal/config"
 	projectenv "convo-cli/internal/env"
@@ -96,6 +97,57 @@ func chooseAgentResource(reader *bufio.Reader, prompt io.Writer, label, selected
 }
 
 func configureAgentResourceSelectors(ctx context.Context, cfg *config.Config, dir string, selection bytePlusResourceSelection, input io.Reader, prompt io.Writer) (map[string]string, error) {
+	reader := bufio.NewReader(input)
+	terminal, interactive := input.(*os.File)
+	interactive = interactive && rtcInputIsTerminal(terminal)
+	flexible := true
+	if interactive {
+		fmt.Fprint(prompt, "Configure Flexible resources? [Y/n] ")
+		answer, err := reader.ReadString('\n')
+		if err != nil {
+			return nil, errs.Wrap(err, "byteplus-rtc.dev.selection_required", "read Flexible resource selection")
+		}
+		switch strings.ToLower(strings.TrimSpace(answer)) {
+		case "", "y", "yes":
+		case "n", "no":
+			flexible = false
+		default:
+			return nil, errs.New("byteplus-rtc.dev.selection_required", errs.TypeValidation, "enter yes or no")
+		}
+	}
+
+	updates := map[string]string{}
+	if flexible {
+		var err error
+		updates, err = selectFlexibleResources(ctx, cfg, selection, reader, prompt, interactive)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if interactive {
+		fmt.Fprint(prompt, "OpenAI API key for Realtime (Enter to skip): ")
+		key, err := readResourcePassword(int(terminal.Fd()))
+		fmt.Fprintln(prompt)
+		if err != nil {
+			return nil, errs.Wrap(err, "byteplus-rtc.dev.selection_required", "read Realtime API key")
+		}
+		if len(key) > 0 {
+			updates["OPENAI_API_KEY"] = string(key)
+		}
+	}
+	if len(updates) == 0 {
+		return nil, nil
+	}
+	if err := writeAgentResourceSelectors(projectenv.Path(dir), updates); err != nil {
+		return nil, err
+	}
+	delete(updates, "OPENAI_API_KEY")
+	return updates, nil
+}
+
+var readResourcePassword = term.ReadPassword
+
+func selectFlexibleResources(ctx context.Context, cfg *config.Config, selection bytePlusResourceSelection, reader *bufio.Reader, prompt io.Writer, interactive bool) (map[string]string, error) {
 	client := newBytePlusResourceClient(cfg)
 	endpoints, err := client.ListModelEndpoints(ctx, selection.ProjectName)
 	if err != nil {
@@ -128,8 +180,6 @@ func configureAgentResourceSelectors(ctx context.Context, cfg *config.Config, di
 		}
 		return err
 	}
-	reader := bufio.NewReader(input)
-	interactive := rtcInputIsTerminal(input)
 	endpoint, err := chooseAgentResource(reader, prompt, "model service", selection.ModelEndpointID, choices["model_endpoints"], interactive)
 	if err != nil {
 		return nil, selectionError(err)
@@ -144,11 +194,7 @@ func configureAgentResourceSelectors(ctx context.Context, cfg *config.Config, di
 	if err != nil {
 		return nil, selectionError(err)
 	}
-	updates := map[string]string{"BYTEPLUS_MODEL_ENDPOINT_ID": endpoint, "BYTEPLUS_MODEL_API_KEY_ID": key, "BYTEPLUS_SEED_SPEECH_APP_ID": speech, "BYTEPLUS_PROJECT_NAME": selection.ProjectName, "BYTEPLUS_MODEL_API_KEY": "", "BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN": ""}
-	if err := writeAgentResourceSelectors(projectenv.Path(dir), updates); err != nil {
-		return nil, err
-	}
-	return updates, nil
+	return map[string]string{"BYTEPLUS_MODEL_ENDPOINT_ID": endpoint, "BYTEPLUS_MODEL_API_KEY_ID": key, "BYTEPLUS_SEED_SPEECH_APP_ID": speech, "BYTEPLUS_PROJECT_NAME": selection.ProjectName, "BYTEPLUS_MODEL_API_KEY": "", "BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN": ""}, nil
 }
 
 func writeAgentResourceSelectors(path string, updates map[string]string) error {
@@ -218,7 +264,11 @@ func configureResourceCommand(c *cobra.Command, project string) error {
 		return err
 	}
 	if flagDryRun {
-		return out().Data(map[string]any{"dry_run": true, "path": projectenv.Path(projectDir(path)), "keys": []string{"BYTEPLUS_MODEL_ENDPOINT_ID", "BYTEPLUS_MODEL_API_KEY_ID", "BYTEPLUS_SEED_SPEECH_APP_ID", "BYTEPLUS_PROJECT_NAME", "BYTEPLUS_MODEL_API_KEY", "BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN"}, "cleared_keys": []string{"BYTEPLUS_MODEL_API_KEY", "BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN"}})
+		keys := []string{"BYTEPLUS_MODEL_ENDPOINT_ID", "BYTEPLUS_MODEL_API_KEY_ID", "BYTEPLUS_SEED_SPEECH_APP_ID", "BYTEPLUS_PROJECT_NAME", "BYTEPLUS_MODEL_API_KEY", "BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN"}
+		if rtcInputIsTerminal(c.InOrStdin()) {
+			keys = append(keys, "OPENAI_API_KEY")
+		}
+		return out().Data(map[string]any{"dry_run": true, "path": projectenv.Path(projectDir(path)), "keys": keys, "cleared_keys": []string{"BYTEPLUS_MODEL_API_KEY", "BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN"}})
 	}
 	selection := bytePlusResourceSelection{ModelEndpointID: flagValue(c, bytePlusModelEndpointFlag), ModelAPIKeyID: flagValue(c, bytePlusModelAPIKeyFlag), SpeechAppID: flagValue(c, bytePlusSpeechAppFlag), ProjectName: project}
 	updates, err := configureAgentResourceSelectors(c.Context(), cfg, projectDir(path), selection, c.InOrStdin(), c.ErrOrStderr())
@@ -227,8 +277,10 @@ func configureResourceCommand(c *cobra.Command, project string) error {
 	}
 	delete(updates, "BYTEPLUS_MODEL_API_KEY")
 	delete(updates, "BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN")
-	out().Progress("resource selections saved; restart the running dev process to apply them")
-	return out().Data(map[string]any{"path": projectenv.Path(projectDir(path)), "resources": updates, "restart_required": true, "next_steps": []string{meta.BinName + " dev"}})
+	if updates != nil {
+		out().Progress("resource selections saved; restart the running dev process to apply them")
+	}
+	return out().Data(map[string]any{"path": projectenv.Path(projectDir(path)), "resources": updates, "restart_required": updates != nil, "next_steps": []string{meta.BinName + " dev"}})
 }
 
 func agentResourceChoices(endpoints []openapi.BytePlusModelEndpoint, keys []openapi.BytePlusModelAPIKey, apps []openapi.BytePlusSpeechApp, project string) map[string][]agentResourceOption {

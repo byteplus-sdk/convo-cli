@@ -26,6 +26,7 @@ import (
 	"convo-cli/internal/openapi"
 	"convo-cli/internal/product"
 	"convo-cli/internal/telemetry"
+	"convo-cli/internal/template"
 )
 
 type fakeRTCAppClient struct {
@@ -1005,5 +1006,103 @@ func TestDevStartsBeforeProviderResourceSelection(t *testing.T) {
 				t.Fatalf("dev queried provider resources %d times", queries)
 			}
 		})
+	}
+}
+
+func TestAIGCDemoUsesPackageScriptsAndBrowserConfig(t *testing.T) {
+	dir := t.TempDir()
+	pkg := filepath.Join(dir, "package.json")
+	manifest := []byte(`{"name":"byteplus-rtc-aigc-demo","scripts":{"dev":"node scripts/dev.cjs","setup":"npm ci"}}`)
+	if err := os.WriteFile(pkg, manifest, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(dir, "server"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "server", "cliRuntime.js"), []byte("module.exports = {};"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, path, err := config.LoadNearest(filepath.Join(dir, "web"))
+	if err != nil || filepath.Dir(path) != dir || cfg.Agent.ConfigSource != config.AgentConfigSourceBrowser || cfg.Agent.ConfigFile != "" {
+		t.Fatalf("project discovery: %v, %s, %v", cfg, path, err)
+	}
+	tf, err := template.LoadTaskfile(dir)
+	if err != nil || !tf.ServerManagedAgent() || !reflect.DeepEqual(tf.Tasks.Install, []string{"npm run setup"}) || !reflect.DeepEqual(tf.Tasks.Dev, []string{"npm run dev"}) {
+		t.Fatalf("tasks: %v, %v", tf, err)
+	}
+	t.Setenv("BYTEPLUS_ACCESS_KEY_ID", "test")
+	t.Setenv("BYTEPLUS_SECRET_ACCESS_KEY", "test")
+	env, err := serverManagedTaskEnv(cfg, dir)
+	if err != nil || taskEnvValue(env, "BYTEPLUS_RTC_CLI_PATH") == "" || taskEnvValue(env, "AGENT_CONFIG_PATH") != "" {
+		t.Fatal("expected CLI runtime with browser-owned scene", err)
+	}
+	if _, err := os.Stat(config.Path(dir)); !os.IsNotExist(err) {
+		t.Fatal("unexpected config file", err)
+	}
+	yamlCfg := config.Default("existing", "voice-agent", "web")
+	if err := config.Save(yamlCfg, config.Path(dir)); err != nil {
+		t.Fatal(err)
+	}
+	loaded, _, err := config.LoadNearest(dir)
+	if err != nil || loaded.Project.Name != "existing" {
+		t.Fatal("expected explicit config to take precedence", err)
+	}
+}
+
+func TestBrowserDemoFirstRunPersistsSelectedAppWithoutKeyLookup(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.Default("demo", "voice-agent", "web")
+	cfg.UseBrowserAgent()
+	t.Setenv("RTC_APP_ID", "")
+	t.Setenv("RTC_APP_KEY", "")
+	t.Setenv("VITE_RTC_APP_ID", "previous-app")
+	fake := &fakeRTCAppClient{appKeyErr: errors.New("unexpected key lookup")}
+	factory := newDevConsoleClient
+	newDevConsoleClient = func(*config.Config) (devConsoleClient, error) { return fake, nil }
+	t.Cleanup(func() { newDevConsoleClient = factory })
+	const appID = "111111111111111111111111"
+	restore, err := bootstrapDevRTCAppCredentialsWithOptions(context.Background(), cfg, dir, strings.NewReader(""), io.Discard, devSetupOptions{AppID: appID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restore()
+	values, err := projectenv.Load(projectenv.Path(dir))
+	if err != nil || values["RTC_APP_ID"] != appID || values["RTC_APP_KEY"] != "" || fake.requestedID != "" {
+		t.Fatal("unexpected RTC first-run setup", err)
+	}
+	if config.CanBootstrapRTCAppCredentials(cfg, config.Validate(cfg), false) {
+		t.Fatal("second run requested credentials again")
+	}
+}
+
+func TestBrowserDemoChangingAppWithConfiguredKey(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.Default("demo", "voice-agent", "web")
+	cfg.UseBrowserAgent()
+	t.Setenv("RTC_APP_ID", "previous-app")
+	t.Setenv("RTC_APP_KEY", "previous-app-key")
+	path := projectenv.Path(dir)
+	if _, err := projectenv.Write(path, map[string]string{"RTC_APP_ID": os.Getenv("RTC_APP_ID"), "RTC_APP_KEY": os.Getenv("RTC_APP_KEY")}); err != nil {
+		t.Fatal(err)
+	}
+	initial, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = bootstrapDevRTCAppCredentialsWithOptions(context.Background(), cfg, dir, strings.NewReader(""), io.Discard, devSetupOptions{AppID: "next-app"})
+	if typed, ok := errs.As(err); !ok || typed.Code != "byteplus-rtc.dev.app_setup_failed" {
+		t.Fatalf("expected app selection error, got %v", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != string(initial) || os.Getenv("RTC_APP_ID") != "previous-app" {
+		t.Fatal("app selection changed the existing credentials", err)
+	}
+	restore, err := bootstrapDevRTCAppCredentialsWithOptions(context.Background(), cfg, dir, strings.NewReader(""), io.Discard, devSetupOptions{AppID: "previous-app"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restore()
+	if os.Getenv("RTC_APP_KEY") != "previous-app-key" {
+		t.Fatal("selecting the current application changed its local signing key")
 	}
 }

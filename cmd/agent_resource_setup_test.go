@@ -419,3 +419,56 @@ func TestResourceSaveReportsRestartAndKeepsFailedSelectionAtomic(t *testing.T) {
 		t.Fatal("resource save exposed credentials")
 	}
 }
+
+func TestInteractiveResourceModes(t *testing.T) {
+	for _, tc := range []struct {
+		name, answers, key string
+		flexible           bool
+	}{
+		{"Flexible", "\n1\n1\n1\n", "", true},
+		{"Realtime", "n\n", "fixture-key", false},
+		{"Both", "yes\n1\n1\n1\n", "fixture-key", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			resourceFixture(t, "", !tc.flexible)
+			dir := t.TempDir()
+			path := projectenv.Path(dir)
+			initial := "RTC_APP_ID=existing-app\n"
+			if err := os.WriteFile(path, []byte(initial), 0600); err != nil {
+				t.Fatal(err)
+			}
+			input, writer, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer input.Close()
+			_, err = io.WriteString(writer, tc.answers)
+			writer.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			oldTTY, oldRead := rtcInputIsTerminal, readResourcePassword
+			t.Cleanup(func() { rtcInputIsTerminal, readResourcePassword = oldTTY, oldRead })
+			rtcInputIsTerminal = func(io.Reader) bool { return true }
+			readResourcePassword = func(int) ([]byte, error) { return []byte(tc.key), nil }
+			var prompt bytes.Buffer
+			result, err := configureAgentResourceSelectors(context.Background(), nil, dir, bytePlusResourceSelection{ProjectName: "default"}, input, &prompt)
+			if err != nil {
+				t.Fatal(err)
+			}
+			values, err := projectenv.Load(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if values["OPENAI_API_KEY"] != tc.key || values["RTC_APP_ID"] != "existing-app" ||
+				(values["BYTEPLUS_MODEL_ENDPOINT_ID"] == "ep-support") != tc.flexible ||
+				(values["BYTEPLUS_MODEL_API_KEY_ID"] == "123") != tc.flexible ||
+				(values["BYTEPLUS_SEED_SPEECH_APP_ID"] == "speech-1") != tc.flexible {
+				t.Fatal("unexpected saved configuration")
+			}
+			if _, exposed := result["OPENAI_API_KEY"]; exposed || strings.Contains(prompt.String(), "fixture-key") {
+				t.Fatal("key exposed in command output")
+			}
+		})
+	}
+}

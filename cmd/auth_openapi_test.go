@@ -632,6 +632,10 @@ func TestOpenAPIInvokeUsesStoredSTSToken(t *testing.T) {
 	var sawOpenAPI bool
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sawOpenAPI = true
+		body, err := io.ReadAll(r.Body)
+		if err != nil || string(body) != `{"Limit":1}` {
+			t.Error("unexpected request body")
+		}
 		if r.URL.Query().Get("Action") != "DescribeSomething" || r.URL.Query().Get("Version") != "2020-01-01" {
 			t.Fatalf("query = %s", r.URL.RawQuery)
 		}
@@ -646,12 +650,13 @@ func TestOpenAPIInvokeUsesStoredSTSToken(t *testing.T) {
 	defer server.Close()
 
 	cmd := NewRootCmd()
+	cmd.SetIn(strings.NewReader(`{"Limit":1}`))
 	cmd.SetArgs([]string{
 		"openapi", "invoke",
 		"--endpoint", server.URL,
 		"--action", "DescribeSomething",
 		"--version", "2020-01-01",
-		"--body", `{"Limit":1}`,
+		"--body", "@-",
 	})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)

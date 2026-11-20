@@ -28,18 +28,18 @@ convo-cli init --scene voice-agent --platform web --name my-agent
 cd my-agent
 ```
 
-`init` downloads the pinned official `RTC_AIGC_Demo` source. Resume an existing project from its directory.
+`init` downloads the pinned official `RTC_AIGC_Demo` source. For a clone of the [CLI-enabled Demo](https://github.com/byteplus-sdk/RTC_AIGC_Demo/tree/feat/rtc-cli-integration), run the resource and startup commands below from the repository root.
 
-Follow [resource setup](resource-setup.md) to discover RTC, model and speech resources, collect the unresolved choices together, and save the provider selections. Carry the selected RTC AppID into startup:
+Follow [resource setup](resource-setup.md) for the selected mode. Flexible defaults to ModelArk and Seed Speech. Realtime uses an OpenAI API key. Carry the selected RTC AppID into startup:
 
 ```bash
 convo-cli dev --app-id <selected-rtc-id>
 ```
 
-`dev` obtains the selected application's credentials, starts the companion service, and launches the Web client. When the project already has the intended RTC credentials, use `convo-cli dev`. Report startup success from the returned runtime status and URLs. Select providers in the Web client; their credentials are checked before starting a conversation.
+`dev` saves the selected RTC AppID, starts the companion service, and launches the Web client. When the project already has the intended AppID, use `convo-cli dev`. Report startup success from the returned runtime status and URLs. Select providers in the Web client; their credentials are checked before starting a conversation.
 
 The supported BytePlus VoiceChat contract uses API Version `2025-05-01` and has no BotID selection step. For selection requests, show the available resource names and use the chosen candidate's ID.
 
 Use `--dry-run` before any setup operation when the user asks to inspect planned writes.
 
-`agent resources --write` prompts for the ModelArk endpoint, API key resource, and Seed Speech application, and saves their IDs in `.env.local`. The Demo checks the selected configuration and Seed Speech access before enabling Call now. Akool avatars require `AKOOL_API_KEY` in the local environment. Use `agent check` after setup for a command-line preflight.
+In a terminal, `agent resources --write` lets the user configure Flexible resources, enter the OpenAI API key at a hidden prompt, or do both. It saves the selections in `.env.local`. Select the mode in the Web client before dialing. Flexible checks the selected providers, including Seed Speech access when configured. Akool avatars require `AKOOL_API_KEY`.

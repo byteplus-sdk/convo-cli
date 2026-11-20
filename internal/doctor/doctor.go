@@ -18,6 +18,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
+
 	"convo-cli/internal/auth"
 	"convo-cli/internal/config"
 	"convo-cli/internal/errs"
@@ -261,6 +263,10 @@ func RunProject(cfg *config.Config, path, dir string) []Check {
 		}
 	}
 
+	if cfg.Agent.ConfigSource == config.AgentConfigSourceBrowser {
+		return append(checks, browserSDKCheck(dir))
+	}
+
 	// SDK version pinned in the taskfile.
 	wantSDK := product.Current().SDKName + "@" + product.Current().SDKVersion
 	if tf, err := loadSDK(dir); err == nil && tf == wantSDK {
@@ -283,6 +289,27 @@ func RunProject(cfg *config.Config, path, dir string) []Check {
 	}
 
 	return checks
+}
+
+func browserSDKCheck(dir string) Check {
+	profile := product.Current()
+	check := Check{ID: "project.sdk", Level: LevelProject, Title: "Web SDK dependency", Status: FAIL}
+	pkg, err := nodeproject.Read(filepath.Join(dir, "web"))
+	if err != nil {
+		check.Detail = "cannot read web/package.json: " + err.Error()
+		return check
+	}
+	dependency := pkg.Dependencies[profile.SDKName]
+	expected := "~" + profile.SDKVersion
+	version, versionErr := semver.StrictNewVersion(strings.TrimPrefix(dependency, "~"))
+	compatible, constraintErr := semver.NewConstraint(expected)
+	if versionErr != nil || constraintErr != nil || !compatible.Check(version) {
+		check.Detail = "expected " + profile.SDKName + "@" + expected + " in web/package.json"
+		return check
+	}
+	check.Status = PASS
+	check.Detail = profile.SDKName + "@" + dependency + " declared in web/package.json"
+	return check
 }
 
 func projectToolchainChecks(dir string) []Check {
@@ -378,6 +405,9 @@ func serverAgentAuthCheck() Check {
 }
 
 func serverAgentConfigCheck(cfg *config.Config, dir string) Check {
+	if cfg.Agent.ConfigSource == config.AgentConfigSourceBrowser {
+		return Check{ID: "project.agent.config", Level: LevelProject, Title: "Server agent config", Status: PASS, Detail: "provided by the browser at call time"}
+	}
 	cfgFile := cfg.Agent.ConfigFile
 	if cfgFile == "" {
 		cfgFile = "server/scenes/default.json"

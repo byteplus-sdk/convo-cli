@@ -59,7 +59,13 @@ type Agent struct {
 
 const (
 	AgentConfigSourceDefault = "template-default"
+	AgentConfigSourceBrowser = "browser"
 )
+
+func (c *Config) UseBrowserAgent() {
+	c.Agent.ConfigFile = ""
+	c.Agent.ConfigSource = AgentConfigSourceBrowser
+}
 
 // Features toggles optional capabilities.
 type Features struct {

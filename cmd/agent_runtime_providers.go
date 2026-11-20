@@ -29,7 +29,58 @@ func providerCredential(key string) (string, error) {
 	return value, nil
 }
 
-func hydrateOtherRuntimeProviders(voice map[string]any) error {
+func hydrateGatewayProvider(kind string, config map[string]any) error {
+	module := strings.TrimSuffix(kind, "Config")
+	invalid := func(field string) error {
+		return errs.New("byteplus-rtc.openapi.invalid_request", errs.TypeValidation, "invalid %s AI Gateway %s", module, field)
+	}
+	params, ok := config["ProviderParams"].(map[string]any)
+	if !ok {
+		if _, exists := config["ProviderParams"]; exists {
+			return invalid("ProviderParams")
+		}
+		params = map[string]any{}
+	}
+	for key, value := range params {
+		switch key {
+		case "ExtraData", "ExtraHeader":
+			if _, ok := value.(map[string]any); !ok {
+				return invalid(key)
+			}
+		case "Voice":
+			if module != "TTS" {
+				return invalid(key)
+			}
+		case "OutputAudioPitchRate", "OutputAudioSpeedRate", "OutputAudioVolume":
+			if _, ok := value.(float64); module != "TTS" || !ok {
+				return invalid(key)
+			}
+		default:
+			return invalid("ProviderParams")
+		}
+	}
+	if voice, _ := params["Voice"].(string); module == "TTS" && strings.TrimSpace(voice) == "" {
+		return invalid("Voice")
+	}
+	urlKey := module + "_GATEWAY_API_URL"
+	address, err := providerCredential(urlKey)
+	if err != nil {
+		return err
+	}
+	u, err := url.Parse(address)
+	if err != nil || u.Scheme != "wss" || u.Hostname() == "" || u.User != nil || strings.Contains(address, "#") {
+		return errs.New("byteplus-rtc.agent.missing_config", errs.TypeValidation, "%s must be a secure WebSocket URL without credentials or a fragment", urlKey)
+	}
+	apiKey, err := providerCredential(module + "_GATEWAY_API_KEY")
+	if err != nil {
+		return err
+	}
+	params["URL"], params["APIKey"] = address, apiKey
+	config["ProviderParams"] = params
+	return nil
+}
+
+func hydrateOtherRuntimeProviders(voice map[string]any, localScene bool) error {
 	set := func(target map[string]any, field, key string) error {
 		value, err := providerCredential(key)
 		if err != nil {
@@ -45,6 +96,12 @@ func hydrateOtherRuntimeProviders(voice map[string]any) error {
 		}
 		provider, _ := config["Provider"].(string)
 		if provider == "BytePlus" || provider == "byteplus_Bidirectional_streaming" {
+			continue
+		}
+		if provider == "ai_gateway" {
+			if err := hydrateGatewayProvider(kind, config); err != nil {
+				return err
+			}
 			continue
 		}
 		params := providerObject(config, "ProviderParams")
@@ -79,18 +136,15 @@ func hydrateOtherRuntimeProviders(voice map[string]any) error {
 			return errs.New("byteplus-rtc.openapi.invalid_request", errs.TypeValidation, "unsupported %s provider %q", kind, provider)
 		}
 	}
+	if !localScene {
+		if err := validateBrowserLLMFields(voice); err != nil {
+			return err
+		}
+	}
 	if llm, ok := voice["LLMConfig"].(map[string]any); ok && llm["Provider"] != "BytePlus" && llm["Mode"] != "BytePlusArk" {
-		key := "CUSTOM_LLM_API_KEY"
-		address, _ := llm["Url"].(string)
-		u, _ := url.Parse(address)
-		if llm["Provider"] == "OpenAI" || (u != nil && u.Scheme == "https" && u.Host == "api.openai.com") {
-			key = "OPENAI_API_KEY"
-		}
-		if u != nil && u.Scheme == "https" && u.Host == "generativelanguage.googleapis.com" {
-			key = "GOOGLE_LLM_API_KEY"
-		}
-		if key == "CUSTOM_LLM_API_KEY" && strings.TrimSpace(os.Getenv(key)) == "" && strings.TrimSpace(os.Getenv("OPENAI_API_KEY")) != "" {
-			key = "OPENAI_API_KEY"
+		key, err := runtimeLLMKey(llm, localScene)
+		if err != nil {
+			return err
 		}
 		if err := set(llm, "APIKey", key); err != nil {
 			return err
@@ -146,4 +200,62 @@ func hydrateOtherRuntimeProviders(voice map[string]any) error {
 		search["ParamsString"] = string(raw)
 	}
 	return nil
+}
+
+func validateBrowserLLMFields(voice map[string]any) error {
+	for field := range voice {
+		if field != "LLMConfig" && strings.EqualFold(field, "LLMConfig") {
+			return errs.New("byteplus-rtc.openapi.invalid_request", errs.TypeValidation, "use Config.LLMConfig for the LLM configuration")
+		}
+	}
+	llm, _ := voice["LLMConfig"].(map[string]any)
+	for field := range llm {
+		for _, canonical := range []string{"Url", "Mode", "Provider"} {
+			if field != canonical && strings.EqualFold(field, canonical) {
+				return errs.New("byteplus-rtc.openapi.invalid_request", errs.TypeValidation, "use LLMConfig.%s for this field", canonical)
+			}
+		}
+	}
+	if _, hasURL := llm["Url"]; hasURL && (llm["Provider"] == "BytePlus" || llm["Mode"] == "BytePlusArk") {
+		return errs.New("byteplus-rtc.openapi.invalid_request", errs.TypeValidation, "BytePlus LLM configuration uses EndPointId")
+	}
+	return nil
+}
+
+func runtimeLLMKey(llm map[string]any, localScene bool) (string, error) {
+	if localScene {
+		address, _ := llm["Url"].(string)
+		u, _ := url.Parse(address)
+		switch {
+		case u != nil && u.Scheme == "https" && u.Host == "generativelanguage.googleapis.com":
+			return "GOOGLE_LLM_API_KEY", nil
+		case llm["Provider"] == "OpenAI" || (u != nil && u.Scheme == "https" && u.Host == "api.openai.com"):
+			return "OPENAI_API_KEY", nil
+		case strings.TrimSpace(os.Getenv("CUSTOM_LLM_API_KEY")) == "" && strings.TrimSpace(os.Getenv("OPENAI_API_KEY")) != "":
+			return "OPENAI_API_KEY", nil
+		default:
+			return "CUSTOM_LLM_API_KEY", nil
+		}
+	}
+
+	if _, present := llm["Url"]; !present && llm["Provider"] == "OpenAI" {
+		return "OPENAI_API_KEY", nil
+	}
+	address, _ := llm["Url"].(string)
+	u, err := url.Parse(address)
+	if err != nil || u.Scheme != "https" || u.Hostname() == "" || u.User != nil {
+		return "", errs.New("byteplus-rtc.openapi.invalid_request", errs.TypeValidation, "LLMConfig.Url must be an HTTPS URL without credentials")
+	}
+	if u.Port() == "" || u.Port() == "443" {
+		switch strings.ToLower(u.Hostname()) {
+		case "api.openai.com":
+			return "OPENAI_API_KEY", nil
+		case "generativelanguage.googleapis.com":
+			return "GOOGLE_LLM_API_KEY", nil
+		}
+	}
+	if address != strings.TrimSpace(os.Getenv("CUSTOM_LLM_URL")) {
+		return "", errs.New("byteplus-rtc.agent.missing_config", errs.TypeValidation, "LLMConfig.Url must match the custom endpoint configured in CUSTOM_LLM_URL")
+	}
+	return "CUSTOM_LLM_API_KEY", nil
 }

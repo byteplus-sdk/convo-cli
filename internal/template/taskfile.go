@@ -11,6 +11,7 @@ import (
 
 	"convo-cli/internal/errs"
 	"convo-cli/internal/meta"
+	"convo-cli/internal/nodeproject"
 	"convo-cli/internal/product"
 )
 
@@ -58,6 +59,12 @@ func LoadTaskfile(dir string) (*Taskfile, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			if nodeproject.IsAIGCDemo(dir) {
+				tf := Taskfile{Version: 2, Scene: "voice-agent", Platform: "web", Runtime: Runtime{Topology: "web-server", AgentControl: "server"}}
+				tf.Tasks.Install = []string{"npm run setup"}
+				tf.Tasks.Dev = []string{"npm run dev"}
+				return &tf, nil
+			}
 			return nil, errs.New("byteplus-rtc.template.not_found", errs.TypeNotFound,
 				"%s not found in %q", name, dir).
 				WithHint("run `%s init` inside a scaffolded project", meta.BinName)

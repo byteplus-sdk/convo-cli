@@ -18,6 +18,7 @@ import (
 )
 
 type Package struct {
+	Name            string            `json:"name"`
 	Dependencies    map[string]string `json:"dependencies"`
 	DevDependencies map[string]string `json:"devDependencies"`
 	Engines         map[string]string `json:"engines"`
@@ -32,6 +33,19 @@ func Read(dir string) (Package, error) {
 	}
 	err = json.Unmarshal(raw, &pkg)
 	return pkg, err
+}
+
+func IsAIGCDemo(dir string) bool {
+	pkg, err := Read(dir)
+	if err != nil || !pkg.IsAIGCDemo() {
+		return false
+	}
+	runtime, err := os.Stat(filepath.Join(dir, "server", "cliRuntime.js"))
+	return err == nil && runtime.Mode().IsRegular() && runtime.Size() > 0
+}
+
+func (pkg Package) IsAIGCDemo() bool {
+	return pkg.Name == "byteplus-rtc-aigc-demo" && pkg.Scripts["setup"] != "" && pkg.Scripts["dev"] != ""
 }
 
 func (p Package) HasDependency(name string) bool {
