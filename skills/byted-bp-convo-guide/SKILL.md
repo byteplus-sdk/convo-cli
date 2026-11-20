@@ -1,7 +1,7 @@
 ---
 name: byted-bp-convo-guide
 description: Explain, integrate, run, and diagnose BytePlus RTC conversational AI and VoiceChat workflows. Use this Skill whenever a user asks about a BytePlus voice agent, StartVoiceChat, RTC_AIGC_Demo, convo-cli, room audio, ASR, LLM, TTS, or related BytePlus RTC documentation and errors.
-version: "0.0.1-rc.2"
+version: "0.0.1-rc.3"
 ---
 
 # BytePlus Conversational AI Guide
