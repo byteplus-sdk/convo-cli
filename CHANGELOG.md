@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.0.1-rc.3
+
+### Improvements
+
+- Select an RTC application during `agent resources --write`, or pass `--app-id` for noninteractive setup. The browser Demo can use GetToken when the account lacks permission to read the RTC AppKey.
+- Initialize `.env.local` from the Demo template and preserve local settings, comments, and matching credentials when updating resources.
+- Include CLI and manual credential guidance in newly scaffolded projects.
+
+### Fixes
+
+- Honor `PORT` and `SERVER_PORT` during preflight and startup, and route browser requests through the Demo's same-origin development proxy.
+- Handle quoted dotenv credentials and inline comments consistently with the Demo, and retain selected resources when retrying noninteractive RTC setup.
+
 ## 0.0.1-rc.2
 
 ### Improvements
