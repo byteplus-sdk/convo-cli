@@ -6,11 +6,12 @@ package cmd
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
-	"sort"
+	"time"
+
 	"strconv"
 	"strings"
 
@@ -124,6 +125,30 @@ func configureAgentResourceSelectors(ctx context.Context, cfg *config.Config, di
 			return nil, err
 		}
 	}
+	local, err := projectenv.Load(projectenv.Path(dir))
+	if err != nil {
+		return nil, err
+	}
+	if flexible && updates["BYTEPLUS_PROJECT_NAME"] == local["BYTEPLUS_PROJECT_NAME"] {
+		if updates["BYTEPLUS_MODEL_API_KEY_ID"] == local["BYTEPLUS_MODEL_API_KEY_ID"] {
+			updates["BYTEPLUS_MODEL_API_KEY"] = local["BYTEPLUS_MODEL_API_KEY"]
+		}
+		if updates["BYTEPLUS_SEED_SPEECH_APP_ID"] == local["BYTEPLUS_SEED_SPEECH_APP_ID"] {
+			updates["BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN"] = local["BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN"]
+		}
+	}
+	rtcID, rtcKey, err := resourceRTCApplication(ctx, cfg, local, selection.RTCAppID, input, reader, prompt)
+	if err != nil {
+		if typed, ok := errs.As(err); ok && !interactive && typed.Param == "--app-id" && typed.Code == "byteplus-rtc.dev.selection_required" {
+			selection.RTCAppID = "<app-id>"
+			typed.Details["retry_argv"] = selection.retryWriteArgs()
+		}
+		return nil, err
+	}
+	updates["RTC_APP_ID"], updates["RTC_APP_KEY"] = rtcID, rtcKey
+	if cfg != nil && cfg.Agent.ConfigSource != config.AgentConfigSourceBrowser {
+		updates["VITE_RTC_APP_ID"] = rtcID
+	}
 	if interactive {
 		fmt.Fprint(prompt, "OpenAI API key for Realtime (Enter to skip): ")
 		key, err := readResourcePassword(int(terminal.Fd()))
@@ -135,17 +160,86 @@ func configureAgentResourceSelectors(ctx context.Context, cfg *config.Config, di
 			updates["OPENAI_API_KEY"] = string(key)
 		}
 	}
-	if len(updates) == 0 {
-		return nil, nil
-	}
-	if err := writeAgentResourceSelectors(projectenv.Path(dir), updates); err != nil {
+	if _, err := projectenv.Write(projectenv.Path(dir), updates); err != nil {
 		return nil, err
 	}
+	delete(updates, "BYTEPLUS_MODEL_API_KEY")
+	delete(updates, "BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN")
+	delete(updates, "RTC_APP_KEY")
 	delete(updates, "OPENAI_API_KEY")
 	return updates, nil
 }
 
+func resourceRTCApplication(ctx context.Context, cfg *config.Config, local map[string]string, requested string, input io.Reader, reader *bufio.Reader, prompt io.Writer) (string, string, error) {
+	configured := ""
+	if cfg != nil && cfg.RTC.AppID != "" && cfg.RTC.AppID != "${RTC_APP_ID}" {
+		var missing []string
+		configured, missing = config.ResolveEnv(cfg.RTC.AppID)
+		if len(missing) > 0 || configured == "" || requested != "" && requested != configured {
+			return "", "", errs.New("byteplus-rtc.dev.app_setup_failed", errs.TypeValidation, "set rtc.app_id to the selected RTC application or to ${RTC_APP_ID}")
+		}
+	}
+	id := firstNonEmptyString(requested, configured, os.Getenv("RTC_APP_ID"), local["RTC_APP_ID"])
+	if id != "" && id == local["RTC_APP_ID"] && local["RTC_APP_KEY"] != "" {
+		return id, local["RTC_APP_KEY"], nil
+	}
+	client, err := newDevConsoleClient(cfg)
+	if err != nil {
+		return "", "", err
+	}
+	if id == "" {
+		apps, err := queryDevApps(ctx, client)
+		if err != nil {
+			return "", "", err
+		}
+		switch {
+		case len(apps) == 0:
+			return "", "", errs.New("byteplus-rtc.dev.app_setup_failed", errs.TypeNotFound, "no active RTC applications are available").WithHint("%s", noAvailableAppHint())
+		case len(apps) == 1:
+			id = apps[0].AppID
+			fmt.Fprintf(prompt, "Selected RTC application: %s (%s)\n", apps[0].Name, id)
+		case rtcInputIsTerminal(input):
+			app, err := selectRTCAppWithReader(input, reader, prompt, apps)
+			if err != nil {
+				return "", "", err
+			}
+			id = app.AppID
+		default:
+			return "", "", devAppSelectionRequiredError(apps, "select an active RTC application").WithHint("retry %s agent resources --write with --app-id <id>", meta.BinName)
+		}
+	}
+	keyCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	keys, err := client.DescribeAppKeys(keyCtx, id)
+	if err != nil {
+		var apiErr *openapi.APIError
+		if cfg != nil && cfg.Agent.ConfigSource == config.AgentConfigSourceBrowser && errors.As(err, &apiErr) &&
+			(apiErr.Code == "AccessDenied" || strings.HasPrefix(apiErr.Code, "AccessDenied.") || apiErr.Code == "LackPolicy") {
+			fmt.Fprintln(prompt, "RTC AppKey access was denied. The browser Demo will use GetToken.")
+			return id, "", nil
+		}
+		return "", "", mapDevRTCAppError(err)
+	}
+	if strings.TrimSpace(keys.AppKey) == "" {
+		return "", "", errs.New("byteplus-rtc.dev.app_setup_failed", errs.TypeNotFound, "no primary AppKey returned for the selected RTC application")
+	}
+	return id, keys.AppKey, nil
+}
+
 var readResourcePassword = term.ReadPassword
+
+func (selection bytePlusResourceSelection) retryWriteArgs() []string {
+	retry := []string{meta.BinName, "agent", "resources", "--write",
+		"--resource-project", selection.ProjectName,
+		"--model-endpoint-id", firstNonEmptyString(selection.ModelEndpointID, "<model-endpoint-id>"),
+		"--model-api-key-id", firstNonEmptyString(selection.ModelAPIKeyID, "<model-api-key-id>"),
+		"--speech-app-id", firstNonEmptyString(selection.SpeechAppID, "<speech-app-id>"),
+	}
+	if selection.RTCAppID != "" {
+		retry = append(retry, "--app-id", selection.RTCAppID)
+	}
+	return retry
+}
 
 func selectFlexibleResources(ctx context.Context, cfg *config.Config, selection bytePlusResourceSelection, reader *bufio.Reader, prompt io.Writer, interactive bool) (map[string]string, error) {
 	client := newBytePlusResourceClient(cfg)
@@ -171,12 +265,7 @@ func selectFlexibleResources(ctx context.Context, cfg *config.Config, selection 
 			typed.Details["choices"] = choices
 			typed.Details["project"] = selection.ProjectName
 			typed.Details["region"] = product.Current().OpenAPIRegion
-			typed.Details["retry_argv"] = []string{meta.BinName, "agent", "resources", "--write",
-				"--resource-project", selection.ProjectName,
-				"--model-endpoint-id", firstNonEmptyString(selection.ModelEndpointID, "<model-endpoint-id>"),
-				"--model-api-key-id", firstNonEmptyString(selection.ModelAPIKeyID, "<model-api-key-id>"),
-				"--speech-app-id", firstNonEmptyString(selection.SpeechAppID, "<speech-app-id>"),
-			}
+			typed.Details["retry_argv"] = selection.retryWriteArgs()
 		}
 		return err
 	}
@@ -197,86 +286,26 @@ func selectFlexibleResources(ctx context.Context, cfg *config.Config, selection 
 	return map[string]string{"BYTEPLUS_MODEL_ENDPOINT_ID": endpoint, "BYTEPLUS_MODEL_API_KEY_ID": key, "BYTEPLUS_SEED_SPEECH_APP_ID": speech, "BYTEPLUS_PROJECT_NAME": selection.ProjectName, "BYTEPLUS_MODEL_API_KEY": "", "BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN": ""}, nil
 }
 
-func writeAgentResourceSelectors(path string, updates map[string]string) error {
-	raw, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return errs.Wrap(err, "byteplus-rtc.env.write_failed", "read local resource configuration")
-	}
-	newline := "\n"
-	if strings.Contains(string(raw), "\r\n") {
-		newline = "\r\n"
-	}
-	text := strings.ReplaceAll(string(raw), "\r\n", "\n")
-	lines := strings.Split(strings.TrimSuffix(text, "\n"), "\n")
-	if len(raw) == 0 {
-		lines = nil
-	}
-	seen := map[string]bool{}
-	for i, line := range lines {
-		key, _, ok := strings.Cut(line, "=")
-		if !ok {
-			continue
-		}
-		key = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(key), "export "))
-		if value, ok := updates[key]; ok {
-			lines[i] = key + "=" + value
-			seen[key] = true
-		}
-	}
-	keys := []string{}
-	for key, value := range updates {
-		if strings.ContainsAny(key+value, "\r\n\x00'\"") {
-			return errs.New("byteplus-rtc.env.write_failed", errs.TypeValidation, "resource selector must be a single-line ID")
-		}
-		if !seen[key] {
-			keys = append(keys, key)
-		}
-	}
-	sort.Strings(keys)
-	for _, key := range keys {
-		lines = append(lines, key+"="+updates[key])
-	}
-	file, err := os.CreateTemp(filepath.Dir(path), ".resource-env-*")
-	if err != nil {
-		return errs.Wrap(err, "byteplus-rtc.env.write_failed", "create local resource configuration")
-	}
-	name := file.Name()
-	defer os.Remove(name)
-	if err = file.Chmod(0o600); err == nil {
-		_, err = file.WriteString(strings.Join(lines, newline) + newline)
-	}
-	closeErr := file.Close()
-	if err == nil {
-		err = closeErr
-	}
-	if err == nil {
-		err = os.Rename(name, path)
-	}
-	if err != nil {
-		return errs.Wrap(err, "byteplus-rtc.env.write_failed", "save local resource configuration")
-	}
-	return nil
-}
-
 func configureResourceCommand(c *cobra.Command, project string) error {
 	cfg, path, err := config.LoadNearest(".")
 	if err != nil {
 		return err
 	}
 	if flagDryRun {
-		keys := []string{"BYTEPLUS_MODEL_ENDPOINT_ID", "BYTEPLUS_MODEL_API_KEY_ID", "BYTEPLUS_SEED_SPEECH_APP_ID", "BYTEPLUS_PROJECT_NAME", "BYTEPLUS_MODEL_API_KEY", "BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN"}
+		keys := []string{"RTC_APP_ID", "RTC_APP_KEY", "BYTEPLUS_MODEL_ENDPOINT_ID", "BYTEPLUS_MODEL_API_KEY_ID", "BYTEPLUS_SEED_SPEECH_APP_ID", "BYTEPLUS_PROJECT_NAME", "BYTEPLUS_MODEL_API_KEY", "BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN"}
+		if cfg.Agent.ConfigSource != config.AgentConfigSourceBrowser {
+			keys = append(keys, "VITE_RTC_APP_ID")
+		}
 		if rtcInputIsTerminal(c.InOrStdin()) {
 			keys = append(keys, "OPENAI_API_KEY")
 		}
-		return out().Data(map[string]any{"dry_run": true, "path": projectenv.Path(projectDir(path)), "keys": keys, "cleared_keys": []string{"BYTEPLUS_MODEL_API_KEY", "BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN"}})
+		return out().Data(map[string]any{"dry_run": true, "path": projectenv.Path(projectDir(path)), "keys": keys, "conditionally_cleared_keys": []string{"BYTEPLUS_MODEL_API_KEY", "BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN"}})
 	}
-	selection := bytePlusResourceSelection{ModelEndpointID: flagValue(c, bytePlusModelEndpointFlag), ModelAPIKeyID: flagValue(c, bytePlusModelAPIKeyFlag), SpeechAppID: flagValue(c, bytePlusSpeechAppFlag), ProjectName: project}
+	selection := bytePlusResourceSelection{RTCAppID: flagValue(c, "app-id"), ModelEndpointID: flagValue(c, bytePlusModelEndpointFlag), ModelAPIKeyID: flagValue(c, bytePlusModelAPIKeyFlag), SpeechAppID: flagValue(c, bytePlusSpeechAppFlag), ProjectName: project}
 	updates, err := configureAgentResourceSelectors(c.Context(), cfg, projectDir(path), selection, c.InOrStdin(), c.ErrOrStderr())
 	if err != nil {
 		return err
 	}
-	delete(updates, "BYTEPLUS_MODEL_API_KEY")
-	delete(updates, "BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN")
 	if updates != nil {
 		out().Progress("resource selections saved; restart the running dev process to apply them")
 	}

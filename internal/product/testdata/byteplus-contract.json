@@ -102,14 +102,14 @@
     "update_notifier_env": "CONVO_CLI_NO_UPDATE_NOTIFIER"
   },
   "template": {
-    "commit": "26b9259d9009577403317cc0c2c53cabb188c2bf",
+    "commit": "062c1d792d0b6e392874d3eaa190d968c2243091",
     "manifest_file": "byteplus-rtc.template.yaml",
     "platform": "web",
     "repository": "byteplus-sdk/RTC_AIGC_Demo",
     "scene": "voice-agent",
     "sdk_name": "@byteplus/rtc",
     "sdk_version": "4.69.3",
-    "sha256": "11662bc03bd69e3dbba56b44d49bdac01f3fd9c69875aa3cf91719f144774a46",
+    "sha256": "6eaf733de27f9f9e8be49dfbb89ac78ba9b0f058a0d2af03fba76fe4db7f0f2c",
     "taskfile": "byteplus-rtc.taskfile.yaml"
   },
   "voicechat": {

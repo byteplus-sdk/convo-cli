@@ -6,8 +6,8 @@ package template
 import "convo-cli/internal/product"
 
 const (
-	bytePlusVoiceAgentRemoteCommit    = "26b9259d9009577403317cc0c2c53cabb188c2bf"
-	bytePlusVoiceAgentCandidateSHA256 = "11662bc03bd69e3dbba56b44d49bdac01f3fd9c69875aa3cf91719f144774a46"
+	bytePlusVoiceAgentRemoteCommit    = "062c1d792d0b6e392874d3eaa190d968c2243091"
+	bytePlusVoiceAgentCandidateSHA256 = "6eaf733de27f9f9e8be49dfbb89ac78ba9b0f058a0d2af03fba76fe4db7f0f2c"
 )
 
 // The URL and checksum are variables so local/E2E tests can serve the exact

@@ -43,7 +43,7 @@ func TestDevPortEnvironmentReachesNodeListenersAndProxy(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			env, cleanup, err := prepareDevPortTaskEnv(ports)
+			env, cleanup, err := prepareDevPortTaskEnv(t.TempDir(), ports)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -119,7 +119,7 @@ func TestResolveDevPortsRejectsInvalidTaskfilePort(t *testing.T) {
 
 func TestPrepareDevPortTaskEnvWritesNodeRoleBridge(t *testing.T) {
 	t.Setenv("NODE_OPTIONS", "")
-	env, cleanup, err := prepareDevPortTaskEnv(template.Ports{Web: 3002, Server: 3001})
+	env, cleanup, err := prepareDevPortTaskEnv(t.TempDir(), template.Ports{Web: 3002, Server: 3001})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,5 +208,26 @@ func TestAutoPortsAvoidWildcardListeners(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+func TestAIGCDemoLauncherReceivesDistinctWebAndServerPorts(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "server"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range map[string]string{"package.json": `{"name":"byteplus-rtc-aigc-demo","scripts":{"setup":"npm install","dev":"node scripts/dev.cjs"}}`, "server/cliRuntime.js": "module.exports = {};"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	values, cleanup, err := prepareDevPortTaskEnv(dir, template.Ports{Web: 3000, Server: 3007})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	got := strings.Join(values, "\n")
+	if !strings.Contains(got, "\nPORT=3000\n") || !strings.HasSuffix(got, "SERVER_PORT=3007") || strings.Contains(got, "NODE_OPTIONS=") {
+		t.Fatalf("unexpected launcher environment: %v", values)
 	}
 }

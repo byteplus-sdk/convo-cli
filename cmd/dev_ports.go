@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"convo-cli/internal/errs"
+	"convo-cli/internal/nodeproject"
 	"convo-cli/internal/template"
 )
 
@@ -121,10 +122,21 @@ func resolveDevPorts(tf *template.Taskfile, webOverride, serverOverride int) (te
 	}
 	for _, override := range []struct {
 		name  string
+		env   string
 		value int
 		dest  *int
-	}{{"--web-port", webOverride, &resolved.Web}, {"--server-port", serverOverride, &resolved.Server}} {
+	}{{"--web-port", "PORT", webOverride, &resolved.Web}, {"--server-port", "SERVER_PORT", serverOverride, &resolved.Server}} {
 		if override.value == 0 {
+			raw := strings.TrimSpace(os.Getenv(override.env))
+			if raw == "" || *override.dest == 0 {
+				continue
+			}
+			port, err := strconv.Atoi(raw)
+			if err != nil || port < 1 || port > 65535 {
+				return template.Ports{}, errs.New("byteplus-rtc.cli.invalid_flag", errs.TypeValidation,
+					"%s must be between 1 and 65535", override.env).WithParam(override.env)
+			}
+			*override.dest = port
 			continue
 		}
 		if override.value < 1 || override.value > 65535 {
@@ -153,9 +165,9 @@ func devPortEnv(ports template.Ports) []string {
 	return values
 }
 
-func prepareDevPortTaskEnv(ports template.Ports) ([]string, func(), error) {
+func prepareDevPortTaskEnv(dir string, ports template.Ports) ([]string, func(), error) {
 	values := devPortEnv(ports)
-	if ports.Web == 0 && ports.Server == 0 {
+	if nodeproject.IsAIGCDemo(dir) || (ports.Web == 0 && ports.Server == 0) {
 		return values, func() {}, nil
 	}
 	file, err := os.CreateTemp("", "convo-cli-dev-ports-*.cjs")

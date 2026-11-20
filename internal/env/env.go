@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -123,12 +124,9 @@ func Load(path string) (map[string]string, error) {
 	return m, sc.Err()
 }
 
-// parseLine parses one dotenv line into (key, value). It mirrors Node dotenv /
-// Vite semantics — the same file the web runtime reads — so a value the frontend
-// resolves one way never resolves differently for the CLI: an optional `export `
-// prefix is dropped, surrounding matched quotes are stripped, and an inline `#`
-// comment on an unquoted value is removed. Blank/comment/malformed lines yield
-// ok=false.
+var dotenvKey = regexp.MustCompile(`^[\w.-]+$`)
+var quotedDotenvValue = regexp.MustCompile(`^\s*('(?:\\'|[^'])*'|"(?:\\"|[^"])*"|\x60(?:\\\x60|[^\x60])*\x60)([ \t]*(?:#.*)?)$`)
+
 func parseLine(raw string) (key, value string, ok bool) {
 	line := strings.TrimSpace(raw)
 	if line == "" || strings.HasPrefix(line, "#") {
@@ -142,71 +140,112 @@ func parseLine(raw string) (key, value string, ok bool) {
 		return "", "", false
 	}
 	k = strings.TrimSpace(k)
-	if k == "" {
+	if !dotenvKey.MatchString(k) {
 		return "", "", false
 	}
-	return k, parseValue(v), true
+	value, _ = splitValue(v)
+	return k, value, true
 }
 
-// parseValue applies dotenv value semantics: a value wrapped in matching single
-// or double quotes returns its inner content verbatim — spaces and `#` preserved,
-// escape sequences (\n, \t, …) NOT expanded, and anything after the closing quote
-// (e.g. a trailing comment) ignored; an unquoted value is trimmed and an inline
-// comment (whitespace followed by `#`) is dropped.
-func parseValue(raw string) string {
-	v := strings.TrimSpace(raw)
-	if len(v) > 0 && (v[0] == '"' || v[0] == '\'') {
-		if end := strings.IndexByte(v[1:], v[0]); end >= 0 {
-			return v[1 : 1+end]
+func splitValue(raw string) (value, suffix string) {
+	if parts := quotedDotenvValue.FindStringSubmatch(raw); parts != nil {
+		quoted := parts[1]
+		value = quoted[1 : len(quoted)-1]
+		if quoted[0] == '"' {
+			value = strings.NewReplacer(`\n`, "\n", `\r`, "\r").Replace(value)
+		}
+		return value, parts[2]
+	}
+	before, _, hasComment := strings.Cut(raw, "#")
+	value = strings.TrimRight(before, " \t")
+	if hasComment {
+		suffix = raw[len(value):]
+	}
+	return strings.TrimSpace(value), suffix
+}
+
+func encodeValue(key, value string) (string, error) {
+	if strings.ContainsAny(value, "\r\n\x00") {
+		return "", errs.New("byteplus-rtc.env.write_failed", errs.TypeValidation, "environment variable %q requires a single-line value", key)
+	}
+	if value == "" || strings.TrimSpace(value) == value && !strings.Contains(value, "#") && !strings.ContainsRune("'\"`", rune(value[0])) {
+		return value, nil
+	}
+	for _, quote := range []string{"'", "`", "\""} {
+		if strings.Contains(value, quote) {
+			continue
+		}
+		encoded := quote + value + quote
+		if decoded, _ := splitValue(encoded); decoded == value {
+			return encoded, nil
 		}
 	}
-	for i := 1; i < len(v); i++ {
-		if v[i] == '#' && (v[i-1] == ' ' || v[i-1] == '\t') {
-			return strings.TrimSpace(v[:i])
-		}
-	}
-	return v
+	return "", errs.New("byteplus-rtc.env.write_failed", errs.TypeValidation, "environment variable %q cannot be represented as a dotenv value", key)
 }
 
 // Write merges updates into the env file at path, preserving existing keys.
 // Returns the set of keys that were written (for a masked summary).
 func Write(path string, updates map[string]string) ([]string, error) {
-	existing, err := Load(path)
-	if err != nil {
-		return nil, err
+	raw, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return nil, errs.Wrap(err, "byteplus-rtc.env.write_failed", "read local environment")
 	}
+	example, err := os.ReadFile(filepath.Join(filepath.Dir(path), ".env.example"))
+	if err != nil && !os.IsNotExist(err) {
+		return nil, errs.Wrap(err, "byteplus-rtc.env.write_failed", "read environment template")
+	}
+	if len(raw) == 0 {
+		raw = example
+		if len(raw) == 0 {
+			raw = []byte(fmt.Sprintf("# Written by `%s env write`. Secrets are env-only; do not commit.\n", meta.BinName))
+		}
+	}
+	newline := "\n"
+	if strings.Contains(string(raw), "\r\n") {
+		newline = "\r\n"
+	}
+	lines := strings.Split(strings.TrimSuffix(strings.ReplaceAll(string(raw), "\r\n", "\n"), "\n"), "\n")
+	if len(example) > 0 && string(raw) != string(example) {
+		lines = restoreTemplateLayout(lines, string(example))
+	}
+	present := map[string]bool{}
+	for _, line := range lines {
+		if key, _, ok := parseLine(line); ok {
+			present[key] = true
+		}
+	}
+	for _, line := range strings.Split(strings.ReplaceAll(string(example), "\r\n", "\n"), "\n") {
+		if key, _, ok := parseLine(line); ok && !present[key] {
+			lines = append(lines, line)
+			present[key] = true
+		}
+	}
+	encoded := map[string]string{}
 	var written []string
-	for k, v := range updates {
-		existing[k] = v
-		written = append(written, k)
-	}
-	keys := make([]string, 0, len(existing))
-	for k := range existing {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	var b strings.Builder
-	fmt.Fprintf(&b, "# Written by `%s env write`. Secrets are env-only; do not commit.\n", meta.BinName)
-	for _, k := range keys {
-		if strings.ContainsAny(k, "=\r\n\x00") || strings.TrimSpace(k) != k || k == "" {
+	for k := range updates {
+		if !dotenvKey.MatchString(k) {
 			return nil, errs.New("byteplus-rtc.env.write_failed", errs.TypeValidation, "invalid environment variable name")
 		}
-		value := existing[k]
-		if strings.ContainsAny(value, "\r\n\x00") {
-			return nil, errs.New("byteplus-rtc.env.write_failed", errs.TypeValidation, "environment variable %q requires a single-line value", k)
+		value, err := encodeValue(k, updates[k])
+		if err != nil {
+			return nil, err
 		}
-		if parseValue(value) != value {
-			switch {
-			case !strings.ContainsRune(value, '\''):
-				value = "'" + value + "'"
-			case !strings.ContainsRune(value, '"'):
-				value = "\"" + value + "\""
-			default:
-				return nil, errs.New("byteplus-rtc.env.write_failed", errs.TypeValidation, "environment variable %q cannot be represented as a dotenv value", k)
-			}
+		encoded[k] = value
+		written = append(written, k)
+	}
+	sort.Strings(written)
+	for i, line := range lines {
+		key, previous, ok := parseLine(line)
+		if value, update := encoded[key]; ok && update && previous != updates[key] {
+			left, right, _ := strings.Cut(line, "=")
+			_, suffix := splitValue(right)
+			lines[i] = left + "=" + value + suffix
 		}
-		fmt.Fprintf(&b, "%s=%s\n", k, value)
+	}
+	for _, key := range written {
+		if !present[key] {
+			lines = append(lines, key+"="+encoded[key])
+		}
 	}
 	if dir := filepath.Dir(path); dir != "" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -218,7 +257,7 @@ func Write(path string, updates map[string]string) ([]string, error) {
 		return nil, errs.New("byteplus-rtc.env.write_failed", errs.TypeIO, "create env file: %s", err)
 	}
 	defer os.Remove(temp.Name())
-	if _, err := temp.WriteString(b.String()); err != nil {
+	if _, err := temp.WriteString(strings.Join(lines, newline) + newline); err != nil {
 		_ = temp.Close()
 		return nil, errs.New("byteplus-rtc.env.write_failed", errs.TypeIO, "write %q: %s", path, err)
 	}
@@ -228,6 +267,47 @@ func Write(path string, updates map[string]string) ([]string, error) {
 	if err := os.Rename(temp.Name(), path); err != nil {
 		return nil, errs.New("byteplus-rtc.env.write_failed", errs.TypeIO, "write %q: %s", path, err)
 	}
-	sort.Strings(written)
 	return written, nil
+}
+
+func restoreTemplateLayout(lines []string, example string) []string {
+	if !sort.StringsAreSorted(lines) {
+		return lines
+	}
+	local := make(map[string]string, len(lines))
+	for _, line := range lines {
+		key, value, ok := parseLine(line)
+		if !ok || line != key+"="+value || strings.Contains(line, "#") {
+			return lines
+		}
+		if _, duplicate := local[key]; duplicate {
+			return lines
+		}
+		local[key] = line
+	}
+	layout := strings.Split(strings.TrimSuffix(strings.ReplaceAll(example, "\r\n", "\n"), "\n"), "\n")
+	missing := false
+	used := make(map[string]bool)
+	for i, line := range layout {
+		key, _, ok := parseLine(line)
+		if !ok {
+			continue
+		}
+		if original, found := local[key]; found {
+			layout[i] = original
+			used[key] = true
+		} else {
+			missing = true
+		}
+	}
+	if !missing {
+		return lines
+	}
+	for _, line := range lines {
+		key, _, _ := parseLine(line)
+		if !used[key] {
+			layout = append(layout, line)
+		}
+	}
+	return layout
 }
