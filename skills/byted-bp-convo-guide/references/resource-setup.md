@@ -25,10 +25,10 @@ For Flexible with ModelArk and Seed Speech:
 5. Save the selected IDs:
 
 ```bash
-convo-cli agent resources --write --resource-project <project> --model-endpoint-id <selected-model-id> --model-api-key-id <selected-key-id> --speech-app-id <selected-speech-id> --format json
+convo-cli agent resources --write --app-id <selected-rtc-id> --resource-project <project> --model-endpoint-id <selected-model-id> --model-api-key-id <selected-key-id> --speech-app-id <selected-speech-id> --format json
 ```
 
-The CLI checks the provider selections again and saves them in `.env.local`. Continue to `convo-cli dev --app-id <selected-rtc-id>` when startup is within the authorized task. Keep the same project directory and authentication context throughout.
+The CLI saves the RTC application and the verified provider selections in `.env.local`. Continue to `convo-cli dev` when startup is within the authorized task. Keep the same project directory and authentication context throughout.
 
 In a terminal, `convo-cli agent resources --write` accepts a number or name. For Agent calls, `byteplus-rtc.dev.selection_required` returns all groups in `error.details.choices` and the current group's candidates in `error.details.candidates`. Ask the user to choose from these labels, then retry with the mapped IDs. If a resource has disappeared, query again and ask for a replacement.
 
@@ -49,8 +49,8 @@ In a terminal, `convo-cli agent resources --write` accepts a number or name. For
 1. Keep the absolute project path and authentication storage context on every command. Stop the project's running dev process before changing accounts. Retain the user's authorization to configure and start the project.
 2. Review RTC and provider variables in the shell and `.env.local` without exposing their values. Update or unset credentials belonging to the previous account through the local credential workflow. Shell variables take precedence over `.env.local`. The companion server uses configured `BYTEPLUS_ACCESS_KEY_ID` and `BYTEPLUS_SECRET_ACCESS_KEY`; CLI requests can use them as an authentication fallback.
 3. Run `convo-cli auth login --force --browser=open` when switching Signin accounts. Ask the user to authorize the intended account in the browser. For environment-based authentication, use the intended account's access keys and verify access through resource discovery.
-4. Repeat [resource selection](#select-resources) under the new authentication context. Discover RTC, model and speech resources, collect unresolved choices together by name, and save the chosen provider IDs with `convo-cli agent resources --write`. The command clears the local `BYTEPLUS_MODEL_API_KEY` and `BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN`; runtime requests obtain credentials for the selected resources. A selected model API key ID takes precedence over `BYTEPLUS_MODEL_API_KEY`.
-5. Inspect `restart_required` and `next_steps` in the save result. When startup is authorized, run `convo-cli dev --app-id <selected-rtc-id>` with the newly selected RTC AppID to select that application and start the services. Report the returned runtime status and URLs. For projects with a saved agent scene, run `convo-cli agent check` from another terminal in the same project and authentication context after RTC configuration is saved. Resolve check failures before starting a conversation. The Demo checks its provider selection before joining a room.
+4. Repeat [resource selection](#select-resources) under the new authentication context. Discover RTC, model and speech resources, collect unresolved choices together by name, and save the chosen provider IDs with `convo-cli agent resources --write`. Changing the model key or speech application clears its previous local credential. Runtime requests obtain credentials for the selected resources. A selected model API key ID takes precedence over `BYTEPLUS_MODEL_API_KEY`.
+5. Inspect `restart_required` and `next_steps` in the save result. When startup is authorized, run `convo-cli dev` with the newly selected RTC AppID to start the services with the saved application. Report the returned runtime status and URLs. For projects with a saved agent scene, run `convo-cli agent check` from another terminal in the same project and authentication context after RTC configuration is saved. Resolve check failures before starting a conversation. The Demo checks its provider selection before joining a room.
 
 For `AccessDenied.NoPermissionForApp`, select an RTC application accessible to the authenticated account or ask its owner or IAM administrator to grant access. `convo-cli dev --reconfigure` also supports selecting an RTC application again and refreshing its credentials in a terminal.
 

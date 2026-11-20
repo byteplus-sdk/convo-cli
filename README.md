@@ -36,9 +36,9 @@ convo-cli dev
 
 For a clone of the [CLI-enabled Demo](https://github.com/byteplus-sdk/RTC_AIGC_Demo/tree/feat/rtc-cli-integration), run the last two commands from the repository root. In an interactive terminal, choose whether to configure Flexible resources and enter an OpenAI API key for Realtime if needed. The key prompt hides your input.
 
-On the first `dev` run, select an RTC application or pass `--app-id <app-id>`. The CLI saves the AppID locally and uses the account's GetToken permission to issue room tokens. Open the web URL reported by `dev`, choose the call mode, and start a conversation.
+Run `convo-cli agent resources --write` to select an RTC application, model and speech resources, and an optional Realtime OpenAI key. Pass `--app-id <id>` to select an RTC application by AppID. The CLI fills in the project's `.env.local` from `.env.example` and preserves local settings on subsequent runs. The browser Demo can use GetToken when the account lacks permission to read the RTC AppKey. Run `convo-cli dev` and open the reported web URL to start a conversation.
 
-Use `convo-cli agent resources --write` to choose model and speech resources by name. Use `--dry-run` to preview configuration updates. For setup and account changes, see [resource setup](skills/byted-bp-convo-guide/references/resource-setup.md).
+Use `--dry-run` to preview configuration updates. For setup and account changes, see [resource setup](skills/byted-bp-convo-guide/references/resource-setup.md).
 
 The Web Demo checks its selected configuration before a call. For projects with a saved agent scene, `convo-cli agent check` checks the scene's providers and Seed Speech access.
 

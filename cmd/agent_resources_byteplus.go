@@ -80,7 +80,8 @@ func (bytePlusAgentResourceContract) Command() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&projectName, bytePlusProjectFlag, "default", "BytePlus resource project name")
-	cmd.Flags().BoolVar(&write, "write", false, "configure Flexible resources and an optional Realtime OpenAI API key in .env.local")
+	cmd.Flags().String("app-id", "", "select an RTC application for --write")
+	cmd.Flags().BoolVar(&write, "write", false, "configure RTC credentials, Flexible resources and an optional Realtime OpenAI API key in .env.local")
 	cmd.Flags().String(bytePlusModelEndpointFlag, "", "select a ModelArk endpoint ID")
 	cmd.Flags().String(bytePlusModelAPIKeyFlag, "", "select a ModelArk API key resource ID")
 	cmd.Flags().String(bytePlusSpeechAppFlag, "", "select a Seed Speech application ID")
@@ -245,6 +246,7 @@ func setRuntimeProviderCredentials(voiceConfig map[string]any, selection bytePlu
 }
 
 type bytePlusResourceSelection struct {
+	RTCAppID        string
 	ModelEndpointID string
 	ModelAPIKeyID   string
 	SpeechAppID     string

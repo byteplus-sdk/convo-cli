@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -418,7 +419,7 @@ func TestDevRejectsOccupiedPortBeforeInstall(t *testing.T) {
 	}
 }
 
-func TestDevPortFlagsOverrideTaskfileAndReachDevTask(t *testing.T) {
+func TestDevFlagAndDotenvPortsReachDevTask(t *testing.T) {
 	occupied, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
@@ -431,8 +432,15 @@ func TestDevPortFlagsOverrideTaskfileAndReachDevTask(t *testing.T) {
 	taskfile := "version: 2\nscene: test-scene\nplatform: web\nruntime:\n  ports:\n    web: " + strconv.Itoa(declaredPort) + "\n    server: 3001\ntasks:\n  dev:\n    - " + strconv.Quote(devPortHelperCommand(t)) + "\n"
 	dir := setupDevPortProject(t, taskfile)
 
+	t.Setenv("SERVER_PORT", "")
+	if err := os.Unsetenv("SERVER_PORT"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(projectenv.Path(dir), []byte(fmt.Sprintf("PORT=%d\nSERVER_PORT=%d\n", declaredPort, serverPort)), 0600); err != nil {
+		t.Fatal(err)
+	}
 	cmd := newDevCmd()
-	cmd.SetArgs([]string{"--web-port", strconv.Itoa(webPort), "--server-port", strconv.Itoa(serverPort)})
+	cmd.SetArgs([]string{"--web-port", strconv.Itoa(webPort)})
 	stdout, err := captureDevStdout(cmd.Execute)
 	if err != nil {
 		t.Fatal(err)

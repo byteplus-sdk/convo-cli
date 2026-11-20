@@ -70,14 +70,18 @@ func TestStandaloneCLI(t *testing.T) {
 		if err := config.Save(config.Default("resource-selection", "voice-agent", "web"), filepath.Join(home, "byteplus-rtc.config.yaml")); err != nil {
 			t.Fatal(err)
 		}
-		output := run(t, "agent", "resources", "--write", "--dry-run", "--format", "json")
+		output := run(t, "agent", "resources", "--app-id", "fixture-app", "--write", "--dry-run", "--format", "json")
 		var preview struct {
 			Data struct {
-				ClearedKeys []string `json:"cleared_keys"`
+				Keys        []string `json:"keys"`
+				ClearedKeys []string `json:"conditionally_cleared_keys"`
 			} `json:"data"`
 		}
 		if err := json.Unmarshal(output, &preview); err != nil {
 			t.Fatal(err)
+		}
+		if !strings.Contains(strings.Join(preview.Data.Keys, ","), "RTC_APP_ID,RTC_APP_KEY") {
+			t.Fatal("missing RTC credential preview")
 		}
 		if strings.Join(preview.Data.ClearedKeys, ",") != "BYTEPLUS_MODEL_API_KEY,BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN" {
 			t.Fatalf("credential reset preview: %s", output)

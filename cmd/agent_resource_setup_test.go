@@ -32,12 +32,12 @@ func TestResourceSelectorsPreserveDotenvContents(t *testing.T) {
 	if err := os.WriteFile(path, []byte(original), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := writeAgentResourceSelectors(path, map[string]string{"BYTEPLUS_MODEL_ENDPOINT_ID": "ep-new", "BYTEPLUS_MODEL_API_KEY_ID": "123"}); err != nil {
+	if _, err := projectenv.Write(path, map[string]string{"BYTEPLUS_MODEL_ENDPOINT_ID": "ep-new", "BYTEPLUS_MODEL_API_KEY_ID": "123"}); err != nil {
 		t.Fatal(err)
 	}
 	raw, _ := os.ReadFile(path)
 	text := string(raw)
-	for _, part := range []string{"# RTC and provider settings\r\n", "RTC_APP_KEY='kept-secret'\r\n", "CUSTOM_VALUE=keep\r\n", "BYTEPLUS_MODEL_ENDPOINT_ID=ep-new\r\n", "BYTEPLUS_MODEL_API_KEY_ID=123\r\n"} {
+	for _, part := range []string{"# RTC and provider settings\r\n", "RTC_APP_KEY='kept-secret'\r\n", "CUSTOM_VALUE=keep\r\n", "BYTEPLUS_MODEL_ENDPOINT_ID=ep-new # previous\r\n", "BYTEPLUS_MODEL_API_KEY_ID=123\r\n"} {
 		if !strings.Contains(text, part) {
 			t.Fatalf("dotenv entry changed: %q", part)
 		}
@@ -125,6 +125,14 @@ func resourceFixture(t *testing.T, failAction string, empty bool) {
 		if action == failAction {
 			w.WriteHeader(http.StatusForbidden)
 			fmt.Fprint(w, `{"ResponseMetadata":{"Error":{"Code":"AccessDenied","Message":"Permission denied"}}}`)
+			return
+		}
+		switch action {
+		case "DescribeApps":
+			fmt.Fprint(w, `{"Result":{"AppList":[{"AppId":"fixture-app","Status":"1"}]}}`)
+			return
+		case "DescribeAppKeys":
+			fmt.Fprint(w, `{"Result":{"AppKey":"fixture-app-key"}}`)
 			return
 		}
 		if empty {
@@ -343,8 +351,8 @@ func TestResourceReselectionClearsLocalCredentials(t *testing.T) {
 	if values["BYTEPLUS_MODEL_API_KEY"] != "" || values["BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN"] != "" {
 		t.Fatal("previous provider credentials remain active")
 	}
-	if values["RTC_APP_KEY"] != "rtc-secret" {
-		t.Fatal("RTC credential changed")
+	if values["RTC_APP_KEY"] != "fixture-app-key" || values["RTC_APP_ID"] != "fixture-app" {
+		t.Fatal("RTC credentials do not match the selected application")
 	}
 }
 
@@ -470,5 +478,107 @@ func TestInteractiveResourceModes(t *testing.T) {
 				t.Fatal("key exposed in command output")
 			}
 		})
+	}
+}
+
+func TestResourceWriteRTCKeyPermission(t *testing.T) {
+	resourceFixture(t, "DescribeAppKeys", false)
+	dir := t.TempDir()
+	path := projectenv.Path(dir)
+	t.Setenv("RTC_APP_ID", "")
+	before := []byte("RTC_APP_ID=old\nRTC_APP_KEY=old-key\nCUSTOM=keep\n")
+	if err := os.WriteFile(path, before, 0600); err != nil {
+		t.Fatal(err)
+	}
+	selection := bytePlusResourceSelection{RTCAppID: "new-app", ProjectName: "default", ModelEndpointID: "ep-support", ModelAPIKeyID: "123", SpeechAppID: "speech-1"}
+	cfg := config.Default("test", "voice-agent", "web")
+	_, err := configureAgentResourceSelectors(context.Background(), cfg, dir, selection, strings.NewReader(""), io.Discard)
+	raw, readErr := os.ReadFile(path)
+	if err == nil || readErr != nil || !bytes.Equal(raw, before) {
+		t.Fatal("failed lookup changed project credentials")
+	}
+	cfg.UseBrowserAgent()
+	result, err := configureAgentResourceSelectors(context.Background(), cfg, dir, selection, strings.NewReader(""), io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := projectenv.Load(path)
+	if err != nil || got["RTC_APP_ID"] != "new-app" || got["RTC_APP_KEY"] != "" || got["CUSTOM"] != "keep" {
+		t.Fatal("incorrect GetToken fallback")
+	}
+	if _, ok := result["RTC_APP_KEY"]; ok {
+		t.Fatal("RTC key included in result")
+	}
+}
+
+func TestResourceWriteKeepsMatchingProviderCredentials(t *testing.T) {
+	resourceFixture(t, "DescribeAppKeys", false)
+	dir := t.TempDir()
+	path := projectenv.Path(dir)
+	initial := map[string]string{"RTC_APP_ID": "app", "RTC_APP_KEY": "fixture-app-key", "BYTEPLUS_PROJECT_NAME": "default", "BYTEPLUS_MODEL_API_KEY_ID": "123", "BYTEPLUS_MODEL_API_KEY": "existing-key", "BYTEPLUS_SEED_SPEECH_APP_ID": "speech-1", "BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN": "existing-token"}
+	if _, err := projectenv.Write(path, initial); err != nil {
+		t.Fatal(err)
+	}
+	selection := bytePlusResourceSelection{RTCAppID: "app", ProjectName: "default", ModelEndpointID: "ep-support", ModelAPIKeyID: "123", SpeechAppID: "speech-1"}
+	result, err := configureAgentResourceSelectors(context.Background(), nil, dir, selection, strings.NewReader(""), io.Discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values, err := projectenv.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"BYTEPLUS_MODEL_API_KEY", "BYTEPLUS_SEED_SPEECH_ACCESS_TOKEN", "RTC_APP_KEY"} {
+		if _, exposed := result[key]; exposed || values[key] != initial[key] {
+			t.Fatalf("credential handling for %s", key)
+		}
+	}
+}
+
+func TestResourceWriteRequiresRTCChoiceWithoutLosingProviderSelections(t *testing.T) {
+	resourceFixture(t, "", false)
+	t.Setenv("RTC_APP_ID", "")
+	client := &fakeRTCAppClient{apps: []openapi.RtcApp{{AppID: "app-a", Status: "1"}, {AppID: "app-b", Status: "1"}}}
+	original := newDevConsoleClient
+	newDevConsoleClient = func(*config.Config) (devConsoleClient, error) { return client, nil }
+	t.Cleanup(func() { newDevConsoleClient = original })
+	dir := t.TempDir()
+	selection := bytePlusResourceSelection{ProjectName: "default", ModelEndpointID: "ep-support", ModelAPIKeyID: "123", SpeechAppID: "speech-1"}
+	_, err := configureAgentResourceSelectors(context.Background(), nil, dir, selection, strings.NewReader(""), io.Discard)
+	typed, ok := errs.As(err)
+	if !ok || typed.Param != "--app-id" {
+		t.Fatalf("selection error = %v", err)
+	}
+	argv, ok := typed.Details["retry_argv"].([]string)
+	if !ok || strings.Join(argv, " ") != meta.BinName+" agent resources --write --resource-project default --model-endpoint-id ep-support --model-api-key-id 123 --speech-app-id speech-1 --app-id <app-id>" {
+		t.Fatalf("retry args = %v", argv)
+	}
+	if _, err := os.Stat(projectenv.Path(dir)); !os.IsNotExist(err) {
+		t.Fatal("selection error wrote local configuration")
+	}
+}
+
+func TestBrowserResourceWriteReturnsSignatureFailure(t *testing.T) {
+	resourceFixture(t, "", false)
+	client := &fakeRTCAppClient{appKeyErr: &openapi.APIError{Action: "DescribeAppKeys", HTTPStatus: http.StatusForbidden, Code: "SignatureDoesNotMatch"}}
+	original := newDevConsoleClient
+	newDevConsoleClient = func(*config.Config) (devConsoleClient, error) { return client, nil }
+	t.Cleanup(func() { newDevConsoleClient = original })
+	dir := t.TempDir()
+	cfg := config.Default("test", "voice-agent", "web")
+	cfg.UseBrowserAgent()
+	selection := bytePlusResourceSelection{RTCAppID: "app-b", ProjectName: "default", ModelEndpointID: "ep-support", ModelAPIKeyID: "123", SpeechAppID: "speech-1"}
+	before := []byte("RTC_APP_ID=app-a\nRTC_APP_KEY=fixture-key\n")
+	path := projectenv.Path(dir)
+	if err := os.WriteFile(path, before, 0600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := configureAgentResourceSelectors(context.Background(), cfg, dir, selection, strings.NewReader(""), io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "SignatureDoesNotMatch") {
+		t.Fatalf("signature error = %v", err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil || !bytes.Equal(after, before) {
+		t.Fatal("signature failure changed saved configuration")
 	}
 }

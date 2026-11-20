@@ -238,7 +238,7 @@ func newDevCmd() *cobra.Command {
 					return err
 				}
 			}
-			portEnv, cleanupPortEnv, err := prepareDevPortTaskEnv(ports)
+			portEnv, cleanupPortEnv, err := prepareDevPortTaskEnv(dir, ports)
 			if err != nil {
 				return err
 			}
