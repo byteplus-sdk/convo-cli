@@ -22,6 +22,18 @@ func writeFile(t *testing.T, dir, name, content string) {
 	}
 }
 
+func TestIsAIGCDemoRequiresCLIRuntime(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, "package.json", `{"name":"byteplus-rtc-aigc-demo","scripts":{"setup":"npm ci","dev":"node scripts/dev.cjs"}}`)
+	if IsAIGCDemo(dir) {
+		t.Fatal("standalone demo without CLI integration accepted")
+	}
+	writeFile(t, dir, "server/cliRuntime.js", "module.exports = {}")
+	if !IsAIGCDemo(dir) {
+		t.Fatal("CLI-integrated demo not recognized")
+	}
+}
+
 func TestNeedsInstallChecksEachPackageWithDependencies(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "package.json", `{"scripts":{"setup":"npm ci"}}`)

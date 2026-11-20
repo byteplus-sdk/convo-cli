@@ -14,6 +14,8 @@ import (
 	"testing"
 
 	"convo-cli/internal/config"
+	"convo-cli/internal/nodeproject"
+	"convo-cli/internal/product"
 )
 
 func TestStandaloneCLI(t *testing.T) {
@@ -102,9 +104,13 @@ func TestStandaloneCLI(t *testing.T) {
 		t.Fatalf("dry-run created project: %v", err)
 	}
 	run(t, "init", filepath.Join(home, "demo"), "--scene", "voice-agent", "--platform", "web", "--format", "json")
-	manifest, err := os.ReadFile(filepath.Join(home, "demo", "byteplus-rtc.taskfile.yaml"))
-	if err != nil || !strings.Contains(string(manifest), "@byteplus/rtc") || !strings.Contains(string(manifest), "4.69.3") {
-		t.Fatalf("template contract: %s (%v)", manifest, err)
+	demo := filepath.Join(home, "demo")
+	if !nodeproject.IsAIGCDemo(demo) {
+		t.Fatal("generated project is missing the demo package or startup scripts")
+	}
+	web, err := nodeproject.Read(filepath.Join(demo, "web"))
+	if err != nil || web.Dependencies["@byteplus/rtc"] != "~"+product.BytePlusSDKVersion {
+		t.Fatalf("generated web SDK dependency: %q (%v)", web.Dependencies["@byteplus/rtc"], err)
 	}
 	ignore, err := os.ReadFile(filepath.Join(home, "demo", ".gitignore"))
 	if err != nil || !strings.Contains(string(ignore), ".convo-cli/") {

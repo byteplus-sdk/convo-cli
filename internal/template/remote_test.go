@@ -285,3 +285,19 @@ func assertErrorCode(t *testing.T, err error, want string) {
 		t.Fatalf("error = %v, want %s", err, want)
 	}
 }
+
+func TestResolvePackageDemoWithoutTemplateManifest(t *testing.T) {
+	files := map[string]string{"package.json": `{"name":"byteplus-rtc-aigc-demo","scripts":{"setup":"npm ci","dev":"node scripts/dev.cjs"}}`, "scripts/dev.cjs": "launch", "server/package.json": "{}", "server/app.js": "app", "server/cliRuntime.js": "runtime", "web/package.json": "{}", "web/src/App.tsx": "app"}
+	archive := archiveMap(t, "demo", files)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write(archive) }))
+	defer server.Close()
+	cfg := config.Default("my-agent", "voice-agent", "web")
+	source := RemoteSource{URL: server.URL, Commit: "candidate", SHA256: fmt.Sprintf("%x", sha256.Sum256(archive))}
+	_, err := Resolve(context.Background(), Template{Available: true, Remote: &source}, cfg, RemoteOptions{CacheDir: t.TempDir()})
+	if err != nil || cfg.Agent.ConfigSource != config.AgentConfigSourceBrowser || cfg.Agent.ConfigFile != "" || cfg.Project.Name != "my-agent" {
+		t.Fatal("incorrect initialized project", err)
+	}
+	if err := validateRemoteContract([]RenderedFile{{Path: "package.json", Content: files["package.json"]}}); err == nil {
+		t.Fatal("incomplete demo accepted")
+	}
+}

@@ -80,6 +80,30 @@ func TestBytePlusDoctorUsesEnvironmentFallbackAndRemoteSDK(t *testing.T) {
 	}
 }
 
+func TestBrowserDemoDoctorChecksWebSDK(t *testing.T) {
+	dir := t.TempDir()
+	writeBytePlusRemoteProject(t, dir)
+	cfg := config.Default("browser-demo", "voice-agent", "web")
+	cfg.UseBrowserAgent()
+	for _, test := range []struct {
+		declaration string
+		want        Status
+	}{
+		{`{"dependencies":{"@byteplus/rtc":"~4.69.3"}}`, PASS},
+		{`{"dependencies":{"@byteplus/rtc":"4.69.4"}}`, PASS},
+		{`{"dependencies":{"@byteplus/rtc":"3.0.0"}}`, FAIL},
+		{`{}`, FAIL},
+	} {
+		if err := os.WriteFile(filepath.Join(dir, "web", "package.json"), []byte(test.declaration), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		sdk, found := findCheck(RunProject(cfg, config.Path(dir), dir), "project.sdk")
+		if !found || sdk.Status != test.want {
+			t.Errorf("SDK check for %s = %+v, want %s", test.declaration, sdk, test.want)
+		}
+	}
+}
+
 func findCheck(checks []Check, id string) (Check, bool) {
 	for _, c := range checks {
 		if c.ID == id {

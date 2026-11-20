@@ -10,12 +10,14 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -23,6 +25,7 @@ import (
 
 	"convo-cli/internal/config"
 	"convo-cli/internal/errs"
+	"convo-cli/internal/nodeproject"
 	"convo-cli/internal/product"
 )
 
@@ -61,7 +64,15 @@ func Resolve(ctx context.Context, t Template, cfg *config.Config, opts RemoteOpt
 	if t.Remote == nil {
 		return Render(t, cfg)
 	}
-	return FetchRemote(ctx, *t.Remote, opts)
+	files, err := FetchRemote(ctx, *t.Remote, opts)
+	if err != nil {
+		return nil, err
+	}
+	hasManifest := slices.ContainsFunc(files, func(f RenderedFile) bool { return f.Path == product.Current().TemplateManifestName })
+	if cfg != nil && !hasManifest {
+		cfg.UseBrowserAgent()
+	}
+	return files, nil
 }
 
 // FetchRemote downloads (or reuses) an immutable archive, verifies it, safely
@@ -323,7 +334,16 @@ func validateRemoteContract(files []RenderedFile) error {
 	taskfileName := profile.TaskfileName
 	raw, ok := byPath[manifestName]
 	if !ok {
-		return contractError("%s is missing", manifestName)
+		var pkg nodeproject.Package
+		if json.Unmarshal([]byte(byPath["package.json"]), &pkg) != nil || !pkg.IsAIGCDemo() {
+			return contractError("%s is missing", manifestName)
+		}
+		for _, name := range []string{"scripts/dev.cjs", "server/package.json", "server/app.js", "server/cliRuntime.js", "web/package.json", "web/src/App.tsx"} {
+			if strings.TrimSpace(byPath[name]) == "" {
+				return contractError("demo requires %s", name)
+			}
+		}
+		return nil
 	}
 	var manifest templateManifest
 	if err := yaml.Unmarshal([]byte(raw), &manifest); err != nil {

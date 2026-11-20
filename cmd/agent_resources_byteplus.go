@@ -80,7 +80,7 @@ func (bytePlusAgentResourceContract) Command() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&projectName, bytePlusProjectFlag, "default", "BytePlus resource project name")
-	cmd.Flags().BoolVar(&write, "write", false, "choose model and speech resources by name and save their configuration in .env.local")
+	cmd.Flags().BoolVar(&write, "write", false, "configure Flexible resources and an optional Realtime OpenAI API key in .env.local")
 	cmd.Flags().String(bytePlusModelEndpointFlag, "", "select a ModelArk endpoint ID")
 	cmd.Flags().String(bytePlusModelAPIKeyFlag, "", "select a ModelArk API key resource ID")
 	cmd.Flags().String(bytePlusSpeechAppFlag, "", "select a Seed Speech application ID")
@@ -119,8 +119,8 @@ func (bytePlusAgentResourceContract) PrepareStart(ctx context.Context, cfg *conf
 	})
 }
 
-func (bytePlusAgentResourceContract) PrepareRuntimeStart(ctx context.Context, cfg *config.Config, request *openapi.StartVoiceChatRequest, dryRun bool) error {
-	if dryRun {
+func (bytePlusAgentResourceContract) PrepareRuntimeStart(ctx context.Context, cfg *config.Config, request *openapi.StartVoiceChatRequest, options runtimeStartOptions) error {
+	if options.dryRun {
 		return nil
 	}
 	var voiceConfig map[string]any
@@ -133,7 +133,7 @@ func (bytePlusAgentResourceContract) PrepareRuntimeStart(ctx context.Context, cf
 		selection.ModelEndpointID, _ = llm["EndPointId"].(string)
 	}
 	selection = bytePlusSelectionFromEnv(selection)
-	if err := hydrateOtherRuntimeProviders(voiceConfig); err != nil {
+	if err := hydrateOtherRuntimeProviders(voiceConfig, options.localScene); err != nil {
 		return err
 	}
 	llm, _ := voiceConfig["LLMConfig"].(map[string]any)

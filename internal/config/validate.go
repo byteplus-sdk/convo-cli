@@ -63,7 +63,7 @@ func CanBootstrapRTCAppCredentials(c *Config, report Report, force bool) bool {
 	}
 	resolvedAppID, missing := ResolveEnv(c.RTC.AppID)
 	appIDMissing := strings.TrimSpace(resolvedAppID) == "" || contains(missing, "RTC_APP_ID")
-	appKeyMissing := strings.TrimSpace(os.Getenv("RTC_APP_KEY")) == ""
+	appKeyMissing := c.Agent.ConfigSource != AgentConfigSourceBrowser && strings.TrimSpace(os.Getenv("RTC_APP_KEY")) == ""
 	if !force && !appIDMissing && !appKeyMissing {
 		return false
 	}
@@ -177,7 +177,7 @@ func Validate(c *Config) Report {
 func validateAgent(c *Config) []Finding {
 	var f []Finding
 	if source := strings.TrimSpace(c.Agent.ConfigSource); source != "" &&
-		source != AgentConfigSourceDefault {
+		source != AgentConfigSourceDefault && source != AgentConfigSourceBrowser {
 		f = append(f, Finding{Field: "agent.config_source", Severity: SevError,
 			Message: fmt.Sprintf("agent.config_source %q is not supported", source),
 			Hint:    "use template-default"})
@@ -186,7 +186,7 @@ func validateAgent(c *Config) []Finding {
 			Message: "agent scene selection has not been resolved by dev",
 			Hint:    "run dev to select an existing bot or confirm the built-in default scene"})
 	}
-	if strings.TrimSpace(c.Agent.ConfigFile) == "" {
+	if c.Agent.ConfigSource != AgentConfigSourceBrowser && strings.TrimSpace(c.Agent.ConfigFile) == "" {
 		f = append(f, Finding{Field: "agent.config_file", Severity: SevWarn,
 			Message: "agent.config_file is unset; the runtime-specific default will be used",
 			Hint:    "set agent.config_file explicitly; generated projects use server/scenes/default.json"})

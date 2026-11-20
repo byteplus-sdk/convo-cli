@@ -188,12 +188,14 @@ func newDevCmd() *cobra.Command {
 				}
 				if devSetupRequired {
 					bootstrap := map[string]any{
-						"required":       true,
-						"reconfigure":    reconfigure,
-						"list_action":    openapi.DescribeAppsAction,
-						"app_key_action": openapi.DescribeAppKeysAction,
-						"version":        openapi.RTCAppManagementVersion,
-						"list_version":   openapi.RTCAppListVersion,
+						"required":     true,
+						"reconfigure":  reconfigure,
+						"list_action":  openapi.DescribeAppsAction,
+						"list_version": openapi.RTCAppListVersion,
+					}
+					if cfg.Agent.ConfigSource != config.AgentConfigSourceBrowser {
+						bootstrap["app_key_action"] = openapi.DescribeAppKeysAction
+						bootstrap["version"] = openapi.RTCAppManagementVersion
 					}
 					result["credential_bootstrap"] = bootstrap
 				}
@@ -354,7 +356,7 @@ func bootstrapDevRTCAppCredentialsWithOptions(
 	}
 	selectorReader := bufio.NewReader(input)
 	refreshCredentials := options.Reconfigure || strings.TrimSpace(options.AppID) != "" ||
-		strings.TrimSpace(os.Getenv("RTC_APP_ID")) == "" || strings.TrimSpace(os.Getenv("RTC_APP_KEY")) == ""
+		strings.TrimSpace(os.Getenv("RTC_APP_ID")) == "" || (cfg.Agent.ConfigSource != config.AgentConfigSourceBrowser && strings.TrimSpace(os.Getenv("RTC_APP_KEY")) == "")
 	var selected openapi.RtcApp
 	if refreshCredentials {
 		requestedAppID := strings.TrimSpace(options.AppID)
@@ -389,21 +391,29 @@ func bootstrapDevRTCAppCredentialsWithOptions(
 		if err != nil {
 			return nil, err
 		}
-		if viteAppID := strings.TrimSpace(os.Getenv("VITE_RTC_APP_ID")); viteAppID != "" && viteAppID != "${RTC_APP_ID}" && viteAppID != selected.AppID {
+		if viteAppID := strings.TrimSpace(os.Getenv("VITE_RTC_APP_ID")); cfg.Agent.ConfigSource != config.AgentConfigSourceBrowser && viteAppID != "" && viteAppID != "${RTC_APP_ID}" && viteAppID != selected.AppID {
 			return nil, errs.New("byteplus-rtc.dev.app_setup_failed", errs.TypePrecondition,
 				"VITE_RTC_APP_ID conflicts with the selected AppID").
 				WithHint("unset VITE_RTC_APP_ID or align it with %s before retrying", selected.AppID)
 		}
 	}
 
-	if cfg.Project.Scene == "voice-agent" {
+	if cfg.Project.Scene == "voice-agent" && cfg.Agent.ConfigSource != config.AgentConfigSourceBrowser {
 		if err := validateDevScene(dir, cfg.Agent.ConfigFile); err != nil {
 			return nil, err
 		}
 	}
 
 	updates := map[string]string{}
-	if refreshCredentials {
+	if refreshCredentials && cfg.Agent.ConfigSource == config.AgentConfigSourceBrowser {
+		previousID := strings.TrimSpace(os.Getenv("RTC_APP_ID"))
+		if previousID != "" && previousID != selected.AppID && strings.TrimSpace(os.Getenv("RTC_APP_KEY")) != "" {
+			return nil, errs.New("byteplus-rtc.dev.app_setup_failed", errs.TypePrecondition,
+				"RTC_APP_KEY is configured for the previously selected application").
+				WithHint("update RTC_APP_ID and RTC_APP_KEY together, or remove RTC_APP_KEY from the environment and .env.local before selecting a different application")
+		}
+		updates["RTC_APP_ID"] = selected.AppID
+	} else if refreshCredentials {
 		keyCtx, cancelKey := context.WithTimeout(ctx, 15*time.Second)
 		keys, err := client.DescribeAppKeys(keyCtx, selected.AppID)
 		cancelKey()
@@ -762,25 +772,23 @@ func loadProjectEnv(dir string) (func(), error) {
 // start/stop where Signin credentials remain inside a short-lived CLI process.
 func serverManagedTaskEnv(cfg *config.Config, dir string) ([]string, error) {
 	profile := product.Current()
-	configFile := strings.TrimSpace(cfg.Agent.ConfigFile)
-	if configFile == "" {
-		configFile = "server/scenes/default.json"
-	}
-	if !filepath.IsAbs(configFile) {
-		configFile = filepath.Join(dir, configFile)
-	}
-	configFile, err := filepath.Abs(configFile)
-	if err != nil {
-		return nil, errs.Wrap(err, "byteplus-rtc.cli.internal", "resolve agent config path: %s", err)
-	}
 	projectDir, err := filepath.Abs(dir)
 	if err != nil {
 		return nil, errs.Wrap(err, "byteplus-rtc.cli.internal", "resolve project path: %s", err)
 	}
 	taskEnv := []string{
-		"AGENT_CONFIG_PATH=" + configFile,
 		profile.BusinessIDEnv + "=" + profile.BusinessID,
 		profile.ProjectDirEnv + "=" + projectDir,
+	}
+	if cfg.Agent.ConfigSource != config.AgentConfigSourceBrowser {
+		configFile := strings.TrimSpace(cfg.Agent.ConfigFile)
+		if configFile == "" {
+			configFile = "server/scenes/default.json"
+		}
+		if !filepath.IsAbs(configFile) {
+			configFile = filepath.Join(projectDir, configFile)
+		}
+		taskEnv = append(taskEnv, "AGENT_CONFIG_PATH="+configFile)
 	}
 	if userAgent, ok := telemetry.GetInvocationUserAgent(); ok {
 		if slash := strings.IndexByte(userAgent, '/'); slash > 0 {
@@ -797,7 +805,9 @@ func serverManagedTaskEnv(cfg *config.Config, dir string) ([]string, error) {
 				"%s and %s must be set together", profile.AccessKeyEnv, profile.SecretKeyEnv).
 				WithHint("set both server credentials or unset them and run `%s auth login`", meta.BinName)
 		}
-		return taskEnv, nil
+		if cfg.Agent.ConfigSource != config.AgentConfigSourceBrowser {
+			return taskEnv, nil
+		}
 	}
 
 	executable, err := os.Executable()

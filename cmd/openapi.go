@@ -6,6 +6,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -71,7 +72,7 @@ func newOpenAPIInvokeCmd() *cobra.Command {
 			if region == "" {
 				region = cfg.OpenAPI.Region
 			}
-			body, err := readBody(bodyArg)
+			body, err := readBody(bodyArg, c.InOrStdin())
 			if err != nil {
 				return err
 			}
@@ -111,7 +112,7 @@ func newOpenAPIInvokeCmd() *cobra.Command {
 	cmd.Flags().StringVar(&action, "action", "", "OpenAPI Action query parameter")
 	cmd.Flags().StringVar(&version, "version", "", "OpenAPI Version query parameter")
 	cmd.Flags().StringVar(&method, "method", http.MethodPost, "HTTP method")
-	cmd.Flags().StringVar(&bodyArg, "body", "", "JSON request body or @file; POST defaults to {}")
+	cmd.Flags().StringVar(&bodyArg, "body", "", "JSON request body, @file, or @- for stdin; POST defaults to {}")
 	cmd.Flags().StringArrayVar(&queryArgs, "query", nil, "additional query parameter as key=value; repeatable")
 	cmd.Flags().DurationVar(&timeout, "timeout", 30*time.Second, "end-to-end timeout")
 	_ = cmd.MarkFlagRequired("action")
@@ -119,10 +120,17 @@ func newOpenAPIInvokeCmd() *cobra.Command {
 	return cmd
 }
 
-func readBody(value string) ([]byte, error) {
+func readBody(value string, input io.Reader) ([]byte, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		return nil, nil
+	}
+	if value == "@-" {
+		var body json.RawMessage
+		if err := decodeRuntimeAgentRequest(input, &body); err != nil {
+			return nil, err
+		}
+		return body, nil
 	}
 	data, err := readMaybeFile(value)
 	if err != nil {

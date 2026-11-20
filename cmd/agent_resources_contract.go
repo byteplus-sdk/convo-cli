@@ -15,11 +15,16 @@ import (
 	"convo-cli/internal/product"
 )
 
+type runtimeStartOptions struct {
+	dryRun     bool
+	localScene bool
+}
+
 type agentResourceContract interface {
 	Command() *cobra.Command
 	ConfigureStart(*cobra.Command)
 	PrepareStart(context.Context, *config.Config, *cobra.Command, bool) (func(), error)
-	PrepareRuntimeStart(context.Context, *config.Config, *openapi.StartVoiceChatRequest, bool) error
+	PrepareRuntimeStart(context.Context, *config.Config, *openapi.StartVoiceChatRequest, runtimeStartOptions) error
 }
 
 var (

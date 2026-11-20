@@ -54,7 +54,7 @@ func newAgentCheckCmd() *cobra.Command {
 		if flagDryRun {
 			return out().Data(map[string]any{"dry_run": true, "checks": []string{"configuration", "speech_access"}})
 		}
-		if err := resources.PrepareRuntimeStart(c.Context(), cfg, &req, false); err != nil {
+		if err := resources.PrepareRuntimeStart(c.Context(), cfg, &req, runtimeStartOptions{localScene: !runtimeStdin}); err != nil {
 			return err
 		}
 		var voice map[string]any
